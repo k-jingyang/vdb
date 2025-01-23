@@ -2,6 +2,5 @@
 
 mod vanama;
 fn main() {
-    println!("Hello, world!");
     vanama::init();
 }
