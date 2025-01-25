@@ -19,11 +19,11 @@ impl Plotter {
         }
     }
     // TODO: feels like a better way is to set the drawing_area into the plotter, but my lifetime knowledge is lacking
-    pub(super) fn add_all_nodes(&mut self, nodes: &Vec<Node>) {
+    pub(super) fn set_connected_nodes(&mut self, nodes: &Vec<Node>) {
         self.all_nodes = nodes.clone();
     }
 
-    pub(super) fn color_specific_nodes(&mut self, nodes: &Vec<Node>) {
+    pub(super) fn set_isolated_nodes(&mut self, nodes: &Vec<Node>) {
         self.color_nodes = nodes.clone();
     }
 

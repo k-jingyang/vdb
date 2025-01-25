@@ -63,44 +63,47 @@ impl Graph {
         k: usize,
         search_list_size: usize,
     ) -> (Vec<usize>, HashSet<usize>) {
-        let mut closests: BinaryHeap<(i64, usize)> = BinaryHeap::new();
+        let mut closest_l: BinaryHeap<(i64, usize)> = BinaryHeap::new();
         let mut visited: HashSet<usize> = HashSet::new();
-
         // .0 is the distance from query_node_index, .1 is the index of the node
         let mut to_visit: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
 
+        // Initial distance
         let start_node_distance = distance(query_node, self.nodes[start_node_index].vector);
         to_visit.push(Reverse((start_node_distance, start_node_index)));
-        closests.push((start_node_distance, start_node_index));
+        closest_l.push((start_node_distance, start_node_index));
 
-        while to_visit.len() > 0 {
-            // TODO: there's a better way at setting visiting
-            let visiting = to_visit.pop().unwrap().0 .1;
+        while let Some(Reverse((_, visiting))) = to_visit.pop() {
             visited.insert(visiting);
+
             for neighbor in &self.nodes[visiting].connected {
                 if visited.contains(neighbor) {
                     continue;
                 }
 
                 let distance_to_q = distance(self.nodes[*neighbor].vector, query_node);
-                to_visit.push(Reverse((distance_to_q, *neighbor)));
-                closests.push((distance_to_q, *neighbor));
+
+                closest_l.push((distance_to_q, *neighbor));
             }
 
-            while closests.len() > search_list_size {
-                closests.pop();
+            // since closest_k is a max heap, we will keep the k closest after popping
+            while closest_l.len() > search_list_size {
+                closest_l.pop();
             }
 
+            // note: super wasteful here
             to_visit.clear();
-            closests.iter().for_each(|node| {
+            closest_l.iter().for_each(|node| {
                 if !visited.contains(&node.1) {
                     to_visit.push(Reverse(*node));
                 }
             })
         }
 
-        let k_closests: Vec<usize> = closests.into_sorted_vec()[0..k]
+        let k_closests: Vec<usize> = closest_l
+            .into_sorted_vec()
             .iter()
+            .take(k)
             .map(|x| x.1)
             .collect();
 
@@ -109,33 +112,53 @@ impl Graph {
 
     pub(super) fn robust_prune(
         &mut self,
-        node_index: usize,
+        p_index: usize,
         visited: &HashSet<usize>,
         distance_threshold: i64,
         degree_bound: usize,
     ) {
-        let mut visited_nodes = visited.clone();
-        // add all nodes connected to node_index into V
-        for i in self.nodes[node_index].connected.iter() {
-            visited_nodes.insert(*i);
+        let mut working_set = HashSet::new();
+        // add all nodes that was visited to try to reach p into working set
+        for visited_node_index in visited.iter() {
+            if *visited_node_index == p_index {
+                continue;
+            }
+            working_set.insert(*visited_node_index);
         }
-        // remove node_index from V
-        visited_nodes.remove(&node_index);
 
-        // set node_index's connected to empty
-        self.nodes[node_index].connected.clear();
+        // add all nodes connected to p into working set
+        for connected_node_index in self.nodes[p_index].connected.iter() {
+            working_set.insert(*connected_node_index);
+        }
 
-        let distance_heap: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
+        let mut distance_heap: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
+        for node_index in working_set.iter() {
+            let distance_from_p =
+                distance(self.nodes[p_index].vector, self.nodes[*node_index].vector);
+            distance_heap.push(Reverse((distance_from_p, *node_index)));
+        }
 
-        while visited_nodes.len() > 0 {
+        // set p's connected to empty
+        self.nodes[p_index].connected.clear();
+
+        while distance_heap.len() > 0 {
             // for all visited nodes, get the node i with min distance to node_index
-            // add i to nodex_index's connected, if N out == degree_bound; stop
-            //
-            if self.nodes[node_index].connected.len() == degree_bound {
+            let Reverse((_, min_node)) = distance_heap.pop().unwrap();
+
+            // add min_node to p_index's connected, if out(p) == degree_bound; stop
+            self.nodes[p_index].connected.insert(min_node);
+            // note: we'll add the reverse connection outside of this method
+
+            if self.nodes[p_index].connected.len() == degree_bound {
                 break;
             }
 
-            // for node p' in visited_nodes, if threshold * d(i, p') <= d(p, p'), remove p' from V
+            let min_node_vector = self.nodes[min_node].vector;
+            distance_heap.retain(|x| {
+                let distance_to_min_node = distance(min_node_vector, self.nodes[x.0 .1].vector);
+                let distance_to_p = distance(self.nodes[x.0 .1].vector, self.nodes[p_index].vector);
+                distance_to_min_node * distance_threshold > distance_to_p
+            });
         }
     }
 }

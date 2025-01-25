@@ -1,3 +1,4 @@
+use plotters::data;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 
 use crate::{
@@ -17,14 +18,13 @@ pub(super) fn init() {
         test_vectors.push(arr);
     }
 
-    let graph = Graph::new(&test_vectors, 5);
+    let mut graph = Graph::new(&test_vectors, 5);
 
     let start_node_index = thread_rng().gen_range(0..graph.nodes.len());
-    let (closests, visited) = graph.greedy_search(start_node_index, [1800.0, 0.0], 3, 10);
 
     let mut plotter = plotter::Plotter::new();
 
-    plotter.add_all_nodes(&graph.nodes);
+    plotter.set_connected_nodes(&graph.nodes);
 
     // let closests_nodes = closests
     //     .iter()
@@ -33,14 +33,47 @@ pub(super) fn init() {
     // plotter.color_specific_nodes(&closests_nodes);
 
     plotter.plot("graph-start.png").unwrap();
+
+    index(&mut graph, 1);
+    plotter.set_connected_nodes(&graph.nodes);
+    plotter.plot("graph-1.png").unwrap();
+
+    index(&mut graph, 2);
+    plotter.set_connected_nodes(&graph.nodes);
+    plotter.plot("graph-2.png").unwrap();
+
+    index(&mut graph, 3);
+    plotter.set_connected_nodes(&graph.nodes);
+    plotter.plot("graph-3.png").unwrap();
 }
 
-fn index(database: &mut Graph) {
-    let range: Vec<usize> = (0..database.nodes.len()).collect();
-    let mut rng = thread_rng();
-    range.shuffle(rng);
+fn index(database: &mut Graph, distance_threshold: i64) {
+    const DEGREE_BOUND: usize = 5;
 
-    for i in range {
-        let (closests, visited) = database.greedy_search(i, [1800.0, 0.0], 3, 10);
+    let start_node_index = thread_rng().gen_range(0..database.nodes.len());
+
+    let mut nodes: Vec<usize> = (0..database.nodes.len()).collect();
+    let mut rng = thread_rng();
+    nodes.shuffle(&mut rng);
+
+    for node in nodes {
+        let (_, visited) =
+            database.greedy_search(start_node_index, database.nodes[node].vector, 3, 10);
+        database.robust_prune(node, &visited, 1, DEGREE_BOUND);
+
+        let connected_nodes = &database.nodes[node].connected.clone();
+        for connected_node in connected_nodes.iter() {
+            database.nodes[*connected_node].connected.insert(node);
+
+            let connected_node_outgoing = database.nodes[*connected_node].connected.clone();
+            if database.nodes[*connected_node].connected.len() > DEGREE_BOUND {
+                database.robust_prune(
+                    *connected_node,
+                    &connected_node_outgoing,
+                    distance_threshold,
+                    DEGREE_BOUND,
+                );
+            }
+        }
     }
 }
