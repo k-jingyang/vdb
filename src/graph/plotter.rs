@@ -3,8 +3,8 @@ use plotters::prelude::{BitMapBackend, Circle, IntoDrawingArea};
 use plotters::series::LineSeries;
 use plotters::style::{ShapeStyle, BLUE, RED, WHITE};
 
-use crate::constant::GRAPH_RANGE;
-use crate::graph::Node;
+use crate::constant::PLOT_GRAPH_X_Y_RANGE;
+use crate::graph::graph::Node;
 
 pub(super) struct Plotter {
     all_nodes: Vec<Node>,
@@ -18,7 +18,7 @@ impl Plotter {
             color_nodes: vec![],
         }
     }
-    // TODO: feels like a better way is to set the drawing_area into the plotter, but my lifetime knowledge is lacking
+
     pub(super) fn set_connected_nodes(&mut self, nodes: &Vec<Node>) {
         self.all_nodes = nodes.clone();
     }
@@ -28,8 +28,7 @@ impl Plotter {
     }
 
     pub(super) fn plot(&self, file_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let output_path = file_name;
-        let root = BitMapBackend::new(output_path, (1024, 1024)).into_drawing_area();
+        let root = BitMapBackend::new(file_name, (1024, 1024)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
         // Define the chart and the axes
@@ -38,7 +37,7 @@ impl Plotter {
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(40)
-            .build_cartesian_2d(GRAPH_RANGE.0, GRAPH_RANGE.1)?; // Adjust the ranges as needed
+            .build_cartesian_2d(PLOT_GRAPH_X_Y_RANGE.0, PLOT_GRAPH_X_Y_RANGE.1)?; // Adjust the ranges as needed
 
         chart.configure_mesh().draw()?;
 
@@ -52,12 +51,13 @@ impl Plotter {
             }
         }
 
+        // Add isolated points
         let color_points = self.color_nodes.iter().map(|node| {
             Circle::new(
                 (node.vector[0], node.vector[1]),
                 5,
                 ShapeStyle::from(&BLUE).filled(),
-            ) // Circle with radius 5
+            )
         });
         chart.draw_series(color_points)?;
 

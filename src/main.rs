@@ -4,8 +4,6 @@
 // good rust dir structure?
 mod constant;
 mod graph;
-mod plotter;
-mod vanama;
 fn main() {
-    vanama::init();
+    graph::vamana::init();
 }

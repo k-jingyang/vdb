@@ -10,6 +10,18 @@ pub(super) struct Graph {
 }
 
 impl Graph {
+    /// Creates a new graph from the given input vectors. The graph is a random graph
+    /// where each node is connected to `r` other nodes. The graph is undirected and
+    /// unweighted.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - A vector of vectors representing the vectors to create nodes from.
+    /// * `r` - The number of random nodes to connect each node to.
+    ///
+    /// # Returns
+    ///
+    /// A new `Graph` with the specified properties.
     pub(super) fn new(input: &Vec<[f64; VECTOR_DIMENSION]>, r: usize) -> Self {
         let mut nodes = input
             .iter()
@@ -69,7 +81,8 @@ impl Graph {
         let mut to_visit: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
 
         // Initial distance
-        let start_node_distance = distance(query_node, self.nodes[start_node_index].vector);
+        let start_node_distance =
+            euclidean_distance(query_node, self.nodes[start_node_index].vector);
         to_visit.push(Reverse((start_node_distance, start_node_index)));
         closest_l.push((start_node_distance, start_node_index));
 
@@ -81,7 +94,7 @@ impl Graph {
                     continue;
                 }
 
-                let distance_to_q = distance(self.nodes[*neighbor].vector, query_node);
+                let distance_to_q = euclidean_distance(self.nodes[*neighbor].vector, query_node);
 
                 closest_l.push((distance_to_q, *neighbor));
             }
@@ -117,46 +130,37 @@ impl Graph {
         distance_threshold: i64,
         degree_bound: usize,
     ) {
-        let mut working_set = HashSet::new();
-        // add all nodes that was visited to try to reach p into working set
-        for visited_node_index in visited.iter() {
-            if *visited_node_index == p_index {
-                continue;
-            }
-            working_set.insert(*visited_node_index);
-        }
+        // add all nodes that was visited to try to reach p (exclusing p) into working set
+        let mut working_set = visited.clone();
+        working_set.retain(|x| *x != p_index);
 
         // add all nodes connected to p into working set
-        for connected_node_index in self.nodes[p_index].connected.iter() {
-            working_set.insert(*connected_node_index);
-        }
+        working_set.extend(self.nodes[p_index].connected.iter());
 
         let mut distance_heap: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
         for node_index in working_set.iter() {
             let distance_from_p =
-                distance(self.nodes[p_index].vector, self.nodes[*node_index].vector);
+                euclidean_distance(self.nodes[p_index].vector, self.nodes[*node_index].vector);
             distance_heap.push(Reverse((distance_from_p, *node_index)));
         }
 
-        // set p's connected to empty
+        // reset p's connected
         self.nodes[p_index].connected.clear();
 
-        while distance_heap.len() > 0 {
-            // for all visited nodes, get the node i with min distance to node_index
-            let Reverse((_, min_node)) = distance_heap.pop().unwrap();
-
-            // add min_node to p_index's connected, if out(p) == degree_bound; stop
+        while let Some(Reverse((_, min_node))) = distance_heap.pop() {
+            // add min_node to p_index's connected
+            // note: the reverse connection is added by the caller of this method
             self.nodes[p_index].connected.insert(min_node);
-            // note: we'll add the reverse connection outside of this method
-
             if self.nodes[p_index].connected.len() == degree_bound {
                 break;
             }
 
             let min_node_vector = self.nodes[min_node].vector;
             distance_heap.retain(|x| {
-                let distance_to_min_node = distance(min_node_vector, self.nodes[x.0 .1].vector);
-                let distance_to_p = distance(self.nodes[x.0 .1].vector, self.nodes[p_index].vector);
+                let distance_to_min_node =
+                    euclidean_distance(min_node_vector, self.nodes[x.0 .1].vector);
+                let distance_to_p =
+                    euclidean_distance(self.nodes[x.0 .1].vector, self.nodes[p_index].vector);
                 distance_to_min_node * distance_threshold > distance_to_p
             });
         }
@@ -168,10 +172,11 @@ pub(super) struct Node {
     pub(super) vector: [f64; VECTOR_DIMENSION],
     pub(super) connected: HashSet<usize>,
 }
-fn distance(a: [f64; VECTOR_DIMENSION], b: [f64; VECTOR_DIMENSION]) -> i64 {
-    let mut sum: f64 = 0.0;
+fn euclidean_distance(a: [f64; VECTOR_DIMENSION], b: [f64; VECTOR_DIMENSION]) -> i64 {
+    let mut squared_distance: f64 = 0.0;
     for i in 0..VECTOR_DIMENSION {
-        sum += (a[i] - b[i]).powi(2);
+        let difference = a[i] - b[i];
+        squared_distance += difference * difference;
     }
-    sum.sqrt().round() as i64
+    squared_distance.sqrt() as i64
 }

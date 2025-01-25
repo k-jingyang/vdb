@@ -6,3 +6,10 @@ Toy implementation of [Vamana (DiskANN) paper](https://proceedings.neurips.cc/pa
 
 1. Deep dive into Vamana index
 2. Get more Rust practice
+3. Understand disk storage of index
+4. Try out benchmarking, see [qdrant](https://qdrant.tech/benchmarks/)
+
+## TODO
+
+1. Explore disk storage representation
+2. Arbitrary vector dimension
