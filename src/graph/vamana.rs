@@ -20,19 +20,21 @@ pub(crate) fn init() {
 
     plotter.set_connected_nodes(&graph.nodes);
 
-    plotter.plot("graph-start.png").unwrap();
+    plotter
+        .plot("static/graph-initial.png", "Initial graph")
+        .unwrap();
 
     index(&mut graph, 1, 5);
     plotter.set_connected_nodes(&graph.nodes);
-    plotter.plot("graph-1.png").unwrap();
+    plotter
+        .plot("static/graph-1.png", "first pass, α=1")
+        .unwrap();
 
     index(&mut graph, 2, 5);
     plotter.set_connected_nodes(&graph.nodes);
-    plotter.plot("graph-2.png").unwrap();
-
-    index(&mut graph, 3, 5);
-    plotter.set_connected_nodes(&graph.nodes);
-    plotter.plot("graph-3.png").unwrap();
+    plotter
+        .plot("static/graph-2.png", "second pass, α=2")
+        .unwrap();
 }
 
 fn index(database: &mut Graph, distance_threshold: i64, degree_bound: usize) {

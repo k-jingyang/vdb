@@ -27,13 +27,17 @@ impl Plotter {
         self.color_nodes = nodes.clone();
     }
 
-    pub(super) fn plot(&self, file_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub(super) fn plot(
+        &self,
+        file_name: &str,
+        title: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let root = BitMapBackend::new(file_name, (1024, 1024)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 
         // Define the chart and the axes
         let mut chart = ChartBuilder::on(&root)
-            .caption("Vectors", ("sans-serif", 30))
+            .caption(title, ("sans-serif", 30))
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(40)
