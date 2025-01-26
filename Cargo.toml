@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 plotters = "0.3.7"
+polars = { version = "0.26.1", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime"] }
 rand = "0.8.5"
