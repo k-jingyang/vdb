@@ -14,8 +14,8 @@ use super::graph::Graph;
 // [metadata][nodes]
 //
 // where [metadata]:
-// [dim][neighbor_count]
-// [u16][      u8       ]
+// [dim][neighbor_count][free_list_len ][ free indices          ]
+// [u16][      u8      ][    u32       ][  u32 * free_list_len  ]
 //
 // where [nodes]:
 // [node_id][.data file offset]
@@ -43,6 +43,9 @@ pub(super) fn write_to_disk(db: &Graph, index_path: &str, data_path: &str) -> io
         .max()
         .unwrap_or(0);
     index_file.write_all(&(max_neighbors as u8).to_be_bytes())?; //  neighbor_count
+
+    // empty free list
+    index_file.write_all(&(0 as u32).to_be_bytes())?;
 
     // Write nodes to data file and record offsets in index file
     for node in &db.nodes {
@@ -80,6 +83,19 @@ pub(super) fn load_from_disk(index_path: &str, data_path: &str) -> io::Result<Gr
     index_file.read_exact(&mut neighbor_count_bytes)?;
     let neighbor_count = neighbor_count_bytes[0] as usize;
 
+    let mut free_list_len_bytes = [0u8; 4];
+    index_file.read_exact(&mut free_list_len_bytes)?;
+    let free_list_len = u32::from_be_bytes(free_list_len_bytes) as usize;
+
+    let mut free_list: Vec<u32> = vec![0u32; free_list_len];
+    if free_list_len > 0 {
+        for value in &mut free_list {
+            let mut bytes = [0u8; 4];
+            index_file.read_exact(&mut bytes)?;
+            *value = u32::from_be_bytes(bytes);
+        }
+    }
+
     // Read node entries from index file
     let mut nodes = Vec::new();
     while let Ok(()) = (|| -> io::Result<()> {
@@ -96,7 +112,7 @@ pub(super) fn load_from_disk(index_path: &str, data_path: &str) -> io::Result<Gr
         data_file.seek(SeekFrom::Start(offset))?;
 
         // Read vector
-        let mut vector = [0.0f32; VECTOR_DIMENSION];
+        let mut vector = vec![0.0f32; dimension];
         for value in &mut vector {
             let mut bytes = [0u8; 4];
             data_file.read_exact(&mut bytes)?;
@@ -149,19 +165,19 @@ mod tests {
         // Add some test nodes
         let node1 = Node {
             id: 100,
-            vector: [1.0, 2.0], // Assuming VECTOR_DIMENSION = 3
+            vector: vec![1.0, 2.0],
             connected: [1, 2].iter().cloned().collect(),
         };
 
         let node2 = Node {
             id: 200,
-            vector: [4.0, 5.0],
+            vector: vec![4.0, 5.0],
             connected: [0, 2].iter().cloned().collect(),
         };
 
         let node3 = Node {
             id: 300,
-            vector: [7.0, 8.0],
+            vector: vec![7.0, 8.0],
             connected: [0, 1].iter().cloned().collect(),
         };
 

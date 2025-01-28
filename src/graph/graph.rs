@@ -23,13 +23,13 @@ impl Graph {
     /// # Returns
     ///
     /// A new `Graph` with the specified properties.
-    pub(super) fn new(input: &Vec<[f32; VECTOR_DIMENSION]>, r: usize) -> Self {
+    pub(super) fn new(input: Vec<&[f32]>, r: usize) -> Self {
         let mut nodes = input
             .iter()
             .enumerate()
             .map(|(i, vector)| Node {
                 id: i as u32,
-                vector: vector.clone(),
+                vector: vector.to_vec(),
                 connected: HashSet::new(),
             })
             .collect::<Vec<Node>>();
@@ -74,7 +74,7 @@ impl Graph {
     pub(super) fn greedy_search(
         &self,
         start_node_index: usize,
-        query_node: [f32; VECTOR_DIMENSION],
+        query_node: &[f32],
         k: usize,
         search_list_size: usize,
     ) -> (Vec<usize>, HashSet<usize>) {
@@ -85,7 +85,7 @@ impl Graph {
 
         // Initial distance
         let start_node_distance =
-            euclidean_distance(query_node, self.nodes[start_node_index].vector);
+            euclidean_distance(query_node, &self.nodes[start_node_index].vector);
         to_visit.push(Reverse((start_node_distance, start_node_index)));
         closest_l.push((start_node_distance, start_node_index));
 
@@ -97,7 +97,7 @@ impl Graph {
                     continue;
                 }
 
-                let distance_to_q = euclidean_distance(self.nodes[*neighbor].vector, query_node);
+                let distance_to_q = euclidean_distance(&self.nodes[*neighbor].vector, query_node);
 
                 closest_l.push((distance_to_q, *neighbor));
             }
@@ -143,7 +143,7 @@ impl Graph {
         let mut distance_heap: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
         for node_index in working_set.iter() {
             let distance_from_p =
-                euclidean_distance(self.nodes[p_index].vector, self.nodes[*node_index].vector);
+                euclidean_distance(&self.nodes[p_index].vector, &self.nodes[*node_index].vector);
             distance_heap.push(Reverse((distance_from_p, *node_index)));
         }
 
@@ -158,12 +158,12 @@ impl Graph {
                 break;
             }
 
-            let min_node_vector = self.nodes[min_node].vector;
+            let min_node_vector = self.nodes[min_node].vector.clone();
             distance_heap.retain(|x| {
                 let distance_to_min_node =
-                    euclidean_distance(min_node_vector, self.nodes[x.0 .1].vector);
+                    euclidean_distance(&min_node_vector, &self.nodes[x.0 .1].vector);
                 let distance_to_p =
-                    euclidean_distance(self.nodes[x.0 .1].vector, self.nodes[p_index].vector);
+                    euclidean_distance(&self.nodes[x.0 .1].vector, &self.nodes[p_index].vector);
                 distance_to_min_node * distance_threshold > distance_to_p
             });
         }
@@ -177,7 +177,8 @@ impl Graph {
         nodes.shuffle(&mut rng);
 
         for node in nodes {
-            let (_, visited) = self.greedy_search(start_node_index, self.nodes[node].vector, 3, 10);
+            let (_, visited) =
+                self.greedy_search(start_node_index, &self.nodes[node].vector, 3, 10);
             self.robust_prune(node, &visited, 1, degree_bound);
 
             let connected_nodes = self.nodes[node].connected.clone();
@@ -201,12 +202,12 @@ impl Graph {
 #[derive(Debug, Clone)]
 pub(super) struct Node {
     pub(super) id: u32,
-    pub(super) vector: [f32; VECTOR_DIMENSION],
+    pub(super) vector: Vec<f32>,
     pub(super) connected: HashSet<usize>,
 }
-fn euclidean_distance(a: [f32; VECTOR_DIMENSION], b: [f32; VECTOR_DIMENSION]) -> i64 {
+fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
     let mut squared_distance: f32 = 0.0;
-    for i in 0..VECTOR_DIMENSION {
+    for i in 0..a.len() {
         let difference = a[i] - b[i];
         squared_distance += difference * difference;
     }
