@@ -211,7 +211,8 @@ mod tests {
         }
 
         // Verify file sizes
-        let index_metadata_size = std::mem::size_of::<u16>() + std::mem::size_of::<u8>();
+        let index_metadata_size =
+            std::mem::size_of::<u16>() + std::mem::size_of::<u8>() + std::mem::size_of::<u32>();
         let index_entry_size = std::mem::size_of::<u32>() + std::mem::size_of::<u64>();
         let expected_index_size =
             index_metadata_size + (index_entry_size * original_graph.nodes.len());
