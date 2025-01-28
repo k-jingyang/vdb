@@ -4,7 +4,7 @@ use polars::prelude::*;
 mod constant;
 mod graph;
 fn main() {
-    // graph::vamana::init();
+    graph::vamana::init();
     let res = read_dataset(
         "dataset/dbpedia-entities-openai-1M/train-00000-of-00026-3c7b99d1c7eda36e.parquet",
     );

@@ -1,5 +1,6 @@
 use crate::constant::VECTOR_DIMENSION;
-use rand::{thread_rng, Rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
+
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashSet},
@@ -25,7 +26,9 @@ impl Graph {
     pub(super) fn new(input: &Vec<[f32; VECTOR_DIMENSION]>, r: usize) -> Self {
         let mut nodes = input
             .iter()
-            .map(|vector| Node {
+            .enumerate()
+            .map(|(i, vector)| Node {
+                id: i as u32,
                 vector: vector.clone(),
                 connected: HashSet::new(),
             })
@@ -165,10 +168,39 @@ impl Graph {
             });
         }
     }
+
+    pub(super) fn index(&mut self, distance_threshold: i64, degree_bound: usize) {
+        let start_node_index = thread_rng().gen_range(0..self.nodes.len());
+
+        let mut nodes: Vec<usize> = (0..self.nodes.len()).collect();
+        let mut rng = thread_rng();
+        nodes.shuffle(&mut rng);
+
+        for node in nodes {
+            let (_, visited) = self.greedy_search(start_node_index, self.nodes[node].vector, 3, 10);
+            self.robust_prune(node, &visited, 1, degree_bound);
+
+            let connected_nodes = self.nodes[node].connected.clone();
+            for connected_node in connected_nodes.iter() {
+                self.nodes[*connected_node].connected.insert(node);
+
+                let connected_node_outgoing = self.nodes[*connected_node].connected.clone();
+                if self.nodes[*connected_node].connected.len() > degree_bound {
+                    self.robust_prune(
+                        *connected_node,
+                        &connected_node_outgoing,
+                        distance_threshold,
+                        degree_bound,
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct Node {
+    pub(super) id: u32,
     pub(super) vector: [f32; VECTOR_DIMENSION],
     pub(super) connected: HashSet<usize>,
 }
