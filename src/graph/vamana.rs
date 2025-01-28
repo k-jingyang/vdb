@@ -7,7 +7,7 @@ use super::{graph::Graph, plotter::Plotter};
 pub(crate) fn init() {
     let mut test_vectors = Vec::new();
     for _ in 0..SEED_DATASET_SIZE {
-        let mut arr = [0f64; VECTOR_DIMENSION];
+        let mut arr = [0f32; VECTOR_DIMENSION];
         for i in 0..VECTOR_DIMENSION {
             let val = thread_rng().gen_range(VECTOR_VALUE_RANGE);
             arr[i] = val

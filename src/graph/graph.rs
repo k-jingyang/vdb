@@ -22,7 +22,7 @@ impl Graph {
     /// # Returns
     ///
     /// A new `Graph` with the specified properties.
-    pub(super) fn new(input: &Vec<[f64; VECTOR_DIMENSION]>, r: usize) -> Self {
+    pub(super) fn new(input: &Vec<[f32; VECTOR_DIMENSION]>, r: usize) -> Self {
         let mut nodes = input
             .iter()
             .map(|vector| Node {
@@ -71,7 +71,7 @@ impl Graph {
     pub(super) fn greedy_search(
         &self,
         start_node_index: usize,
-        query_node: [f64; VECTOR_DIMENSION],
+        query_node: [f32; VECTOR_DIMENSION],
         k: usize,
         search_list_size: usize,
     ) -> (Vec<usize>, HashSet<usize>) {
@@ -169,11 +169,11 @@ impl Graph {
 
 #[derive(Debug, Clone)]
 pub(super) struct Node {
-    pub(super) vector: [f64; VECTOR_DIMENSION],
+    pub(super) vector: [f32; VECTOR_DIMENSION],
     pub(super) connected: HashSet<usize>,
 }
-fn euclidean_distance(a: [f64; VECTOR_DIMENSION], b: [f64; VECTOR_DIMENSION]) -> i64 {
-    let mut squared_distance: f64 = 0.0;
+fn euclidean_distance(a: [f32; VECTOR_DIMENSION], b: [f32; VECTOR_DIMENSION]) -> i64 {
+    let mut squared_distance: f32 = 0.0;
     for i in 0..VECTOR_DIMENSION {
         let difference = a[i] - b[i];
         squared_distance += difference * difference;
