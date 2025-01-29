@@ -1,5 +1,9 @@
+use rand::seq::index;
+
 use crate::graph::Graph;
 use crate::{constant::VECTOR_DIMENSION, graph::Node};
+use core::error;
+use std::error::Error;
 use std::{
     collections::HashSet,
     fs::File,
@@ -8,38 +12,105 @@ use std::{
 
 use super::storage::GraphStorage;
 
-pub struct DiskStorage {}
+// disk layout
+// principle: lookup for each node index (not node_id) must be O(1)
+//
+// .free file:
+// [free indices]
+// [ u32 * as many]
+//
+// .index file:
+// [metadata][nodes]
+//
+// where [metadata]:
+// [dim][max_neighbor_count][next node index]
+// [u16][      u8          ][u32            ]
+//
+// where [nodes]:
+// [node_id][vector      ][    neighbor indexes     ]
+// [ u32   ][ f32 * dim  ][  u32 * neighbor_count   ]
+//
+// TODO:
+// 1. Figure out how to do metadata storage?
+// 2. node_id uniqueness
+//
+pub struct DiskStorage {
+    dimensions: u16,
+    max_neighbour_count: u8,
+    index_path: String,
+    free_path: String,
+}
+
+impl DiskStorage {
+    // initialise a new disk backend
+    // TODO: allow reading old copy
+    fn new(
+        dimensions: u16,
+        max_neighbor_count: u8,
+        index_path: &str,
+        free_path: &str,
+    ) -> Result<DiskStorage, Box<dyn Error>> {
+        let mut index_file = BufWriter::new(File::create(index_path)?);
+
+        // Write metadata to index file
+        index_file.write_all(&dimensions.to_be_bytes())?;
+        index_file.write_all(&max_neighbor_count.to_be_bytes())?;
+        index_file.write_all(&(0u32).to_be_bytes())?;
+
+        Ok(DiskStorage {
+            dimensions: dimensions,
+            max_neighbour_count: max_neighbor_count,
+            index_path: index_path.to_string(),
+            free_path: free_path.to_string(),
+        })
+    }
+}
 
 impl GraphStorage for DiskStorage {
     fn add_connections(&self, connections: &[(Node, Node)]) -> io::Result<()> {
         println!("hello");
         Ok(())
     }
-}
-// disk layout
-//
-// .index file:
-// [metadata][nodes]
-//
-// where [metadata]:
-// [dim][neighbor_count][free_list_len ][ free indices          ]
-// [u16][      u8      ][    u32       ][  u32 * free_list_len  ]
-//
-// where [nodes]:
-// [node_id][.data file offset]
-// [  u32  ][     u64         ]
-//
-// .data file:
-// [   vector   ][    neighbor indexes     ]
-// [ f32 * dim  ][u32 * neighbor_count     ]
-//
-// TODO: Figure out how to do metadata storage, we can't update .data file in place because any updates will result
-// in the update of all the node offsets after that node
-//
-pub(crate) fn write(db: &Graph, index_path: &str, data_path: &str) -> io::Result<()> {
-    let mut index_file = BufWriter::new(File::create(index_path)?);
-    let mut data_file = BufWriter::new(File::create(data_path)?);
 
+    fn add_nodes(&self, nodes: &[Node]) -> io::Result<()> {
+        // validate that all node's max connection is below max_neighbor_count
+        for node in nodes {
+            if node.connected.len() > self.max_neighbour_count as usize {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Node's connected exceeds max_neighbor_count",
+                ));
+            }
+        }
+
+        // write nodes to index file
+        // let mut index_file = BufWriter::new(File::open(&self.index_path)?);
+        let mut index_file = File::open(&self.index_path)?;
+        index_file.seek(SeekFrom::Current(
+            (std::mem::size_of::<u16>() + std::mem::size_of::<u8>() + std::mem::size_of::<u32>())
+                as i64,
+        ))?;
+
+        for node in nodes {
+            // write node id
+            index_file.write_all(&(node.id).to_be_bytes())?;
+
+            // Write vector value
+            for &value in &node.vector {
+                index_file.write_all(&value.to_be_bytes())?;
+            }
+
+            // Write neighbor indices
+            let mut neighbor_indices: Vec<u32> = node.connected.iter().map(|&x| x as u32).collect();
+            neighbor_indices.resize(self.max_neighbour_count.into(), u32::MAX); // Pad if needed
+            for &id in &neighbor_indices {
+                index_file.write_all(&id.to_be_bytes())?;
+            }
+        }
+        Ok(())
+    }
+}
+pub(crate) fn write(db: &Graph, index_path: &str, data_path: &str) -> io::Result<()> {
     // Write metadata to index file
     index_file.write_all(&(VECTOR_DIMENSION as u16).to_be_bytes())?; // dimension
 
@@ -151,7 +222,7 @@ pub(crate) fn load(index_path: &str, data_path: &str) -> io::Result<Graph> {
     })() {}
     // Continue reading nodes
     Ok(Graph {
-        nodes: nodes,
+        // nodes: nodes,
         storage: Box::new(DiskStorage {}),
     })
 }

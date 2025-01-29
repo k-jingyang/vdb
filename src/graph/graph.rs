@@ -7,7 +7,7 @@ use std::{
 };
 
 pub(crate) struct Graph {
-    pub(crate) nodes: Vec<Node>,
+    // pub(crate) nodes: Vec<Node>,
     pub(crate) storage: Box<dyn GraphStorage>,
 }
 
@@ -55,7 +55,7 @@ impl Graph {
         }
 
         Graph {
-            nodes: nodes,
+            // nodes: nodes,
             storage: store,
         }
     }
