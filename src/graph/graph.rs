@@ -1,4 +1,4 @@
-use crate::constant::VECTOR_DIMENSION;
+use crate::storage::GraphStorage;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 
 use std::{
@@ -6,8 +6,9 @@ use std::{
     collections::{BinaryHeap, HashSet},
 };
 
-pub(super) struct Graph {
-    pub(super) nodes: Vec<Node>,
+pub(crate) struct Graph {
+    pub(crate) nodes: Vec<Node>,
+    pub(crate) storage: Box<dyn GraphStorage>,
 }
 
 impl Graph {
@@ -23,7 +24,7 @@ impl Graph {
     /// # Returns
     ///
     /// A new `Graph` with the specified properties.
-    pub(super) fn new(input: Vec<&[f32]>, r: usize) -> Self {
+    pub(super) fn new(input: Vec<&[f32]>, r: usize, store: Box<dyn GraphStorage>) -> Self {
         let mut nodes = input
             .iter()
             .enumerate()
@@ -53,7 +54,10 @@ impl Graph {
             }
         }
 
-        Graph { nodes: nodes }
+        Graph {
+            nodes: nodes,
+            storage: store,
+        }
     }
 
     /// Performs a greedy search starting from a given node index to find the k closest nodes
@@ -200,10 +204,10 @@ impl Graph {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct Node {
-    pub(super) id: u32,
-    pub(super) vector: Vec<f32>,
-    pub(super) connected: HashSet<usize>,
+pub(crate) struct Node {
+    pub(crate) id: u32,
+    pub(crate) vector: Vec<f32>,
+    pub(crate) connected: HashSet<usize>,
 }
 fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
     let mut squared_distance: f32 = 0.0;

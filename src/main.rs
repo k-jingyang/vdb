@@ -3,6 +3,7 @@ use polars::prelude::*;
 
 mod constant;
 mod graph;
+mod storage;
 fn main() {
     graph::vamana::init();
     let res = read_dataset(

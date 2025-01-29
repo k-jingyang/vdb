@@ -2,7 +2,8 @@ use rand::{thread_rng, Rng};
 
 use crate::constant::{SEED_DATASET_SIZE, VECTOR_DIMENSION, VECTOR_VALUE_RANGE};
 
-use super::{disk, graph::Graph, plotter::Plotter};
+use super::{graph::Graph, plotter::Plotter};
+use crate::storage::DiskStorage;
 
 pub(crate) fn init() {
     let mut test_vectors: Vec<Vec<f32>> = Vec::new();
@@ -16,7 +17,7 @@ pub(crate) fn init() {
     }
 
     let converted_vectors: Vec<&[f32]> = test_vectors.iter().map(|vec| vec.as_slice()).collect();
-    let mut graph = Graph::new(converted_vectors, 5);
+    let mut graph = Graph::new(converted_vectors, 5, Box::new(DiskStorage {}));
     let mut plotter = Plotter::new();
 
     plotter.set_connected_nodes(&graph.nodes);

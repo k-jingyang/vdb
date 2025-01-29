@@ -1,13 +1,21 @@
+use crate::graph::Graph;
+use crate::{constant::VECTOR_DIMENSION, graph::Node};
 use std::{
     collections::HashSet,
     fs::File,
     io::{self, BufWriter, Read, Seek, SeekFrom, Write},
 };
 
-use crate::{constant::VECTOR_DIMENSION, graph::graph::Node};
+use super::storage::GraphStorage;
 
-use super::graph::Graph;
+pub struct DiskStorage {}
 
+impl GraphStorage for DiskStorage {
+    fn add_connections(&self, connections: &[(Node, Node)]) -> io::Result<()> {
+        println!("hello");
+        Ok(())
+    }
+}
 // disk layout
 //
 // .index file:
@@ -28,7 +36,7 @@ use super::graph::Graph;
 // TODO: Figure out how to do metadata storage, we can't update .data file in place because any updates will result
 // in the update of all the node offsets after that node
 //
-pub(super) fn write_to_disk(db: &Graph, index_path: &str, data_path: &str) -> io::Result<()> {
+pub(crate) fn write(db: &Graph, index_path: &str, data_path: &str) -> io::Result<()> {
     let mut index_file = BufWriter::new(File::create(index_path)?);
     let mut data_file = BufWriter::new(File::create(data_path)?);
 
@@ -69,7 +77,8 @@ pub(super) fn write_to_disk(db: &Graph, index_path: &str, data_path: &str) -> io
 
     Ok(())
 }
-pub(super) fn load_from_disk(index_path: &str, data_path: &str) -> io::Result<Graph> {
+
+pub(crate) fn load(index_path: &str, data_path: &str) -> io::Result<Graph> {
     let mut index_file = File::open(index_path)?;
     let mut data_file = File::open(data_path)?;
 
@@ -141,13 +150,15 @@ pub(super) fn load_from_disk(index_path: &str, data_path: &str) -> io::Result<Gr
         Ok(())
     })() {}
     // Continue reading nodes
-
-    Ok(Graph { nodes })
+    Ok(Graph {
+        nodes: nodes,
+        storage: Box::new(DiskStorage {}),
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::disk;
+    use crate::storage::disk;
 
     use super::*;
     use std::{env, fs};
@@ -160,7 +171,10 @@ mod tests {
         let data_path = temp_dir.as_path().join("test.data");
 
         // Create a test graph
-        let mut original_graph = Graph { nodes: Vec::new() };
+        let mut original_graph = Graph {
+            nodes: Vec::new(),
+            storage: Box::new(DiskStorage {}),
+        };
 
         // Add some test nodes
         let node1 = Node {
@@ -186,7 +200,7 @@ mod tests {
         original_graph.nodes.push(node3);
 
         // Save the graph
-        disk::write_to_disk(
+        disk::write(
             &original_graph,
             index_path.to_str().unwrap(),
             data_path.to_str().unwrap(),
@@ -194,8 +208,7 @@ mod tests {
         .unwrap();
 
         // Load the graph back
-        let loaded_graph =
-            disk::load_from_disk(index_path.to_str().unwrap(), data_path.to_str().unwrap())?;
+        let loaded_graph = disk::load(index_path.to_str().unwrap(), data_path.to_str().unwrap())?;
 
         // Assert the graphs are equal
         assert_eq!(original_graph.nodes.len(), loaded_graph.nodes.len());
@@ -237,16 +250,18 @@ mod tests {
         let index_path = temp_dir.as_path().join("empty.index");
         let data_path = temp_dir.as_path().join("empty.data");
 
-        let empty_graph = Graph { nodes: Vec::new() };
+        let empty_graph = Graph {
+            nodes: Vec::new(),
+            storage: Box::new(DiskStorage {}),
+        };
 
-        disk::write_to_disk(
+        disk::write(
             &empty_graph,
             index_path.to_str().unwrap(),
             data_path.to_str().unwrap(),
         )?;
 
-        let loaded_graph =
-            disk::load_from_disk(index_path.to_str().unwrap(), data_path.to_str().unwrap())?;
+        let loaded_graph = disk::load(index_path.to_str().unwrap(), data_path.to_str().unwrap())?;
 
         assert_eq!(empty_graph.nodes.len(), loaded_graph.nodes.len());
         assert_eq!(loaded_graph.nodes.len(), 0);
