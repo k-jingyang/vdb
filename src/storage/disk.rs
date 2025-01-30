@@ -1,19 +1,20 @@
 use rand::seq::index;
+use rand::Rng;
 
 use crate::graph::Graph;
 use crate::{constant::VECTOR_DIMENSION, graph::Node};
 use core::error;
-use std::error::Error;
+use std::fs::OpenOptions;
+use std::io::{self, Error, ErrorKind};
 use std::{
     collections::HashSet,
     fs::File,
-    io::{self, BufWriter, Read, Seek, SeekFrom, Write},
+    io::{BufWriter, Read, Seek, SeekFrom, Write},
 };
 
 use super::storage::GraphStorage;
-
 // disk layout
-// principle: lookup for each node index (not node_id) must be O(1)
+// principle: lookup for each node index must be O(1)
 //
 // .free file:
 // [free indices]
@@ -27,29 +28,30 @@ use super::storage::GraphStorage;
 // [u16][      u8          ][u32            ]
 //
 // where [nodes]:
-// [node_id][vector      ][    neighbor indexes     ]
-// [ u32   ][ f32 * dim  ][  u32 * neighbor_count   ]
+// [node_id][vector      ][    neighbor indexes                  ]
+// [ u32   ][ f32 * dim  ][  u32 * max_neighbor_count (padded)   ]
 //
 // TODO:
 // 1. Figure out how to do metadata storage?
-// 2. node_id uniqueness
-//
-pub struct DiskStorage {
+// 2. log based input instead
+// 3. decouple node_id from node index
+pub struct NaiveDisk {
     dimensions: u16,
     max_neighbour_count: u8,
+    next_node_index: u32,
     index_path: String,
     free_path: String,
 }
 
-impl DiskStorage {
+impl NaiveDisk {
     // initialise a new disk backend
     // TODO: allow reading old copy
-    fn new(
+    pub(crate) fn new(
         dimensions: u16,
         max_neighbor_count: u8,
         index_path: &str,
         free_path: &str,
-    ) -> Result<DiskStorage, Box<dyn Error>> {
+    ) -> Result<NaiveDisk, Box<dyn std::error::Error>> {
         let mut index_file = BufWriter::new(File::create(index_path)?);
 
         // Write metadata to index file
@@ -57,286 +59,206 @@ impl DiskStorage {
         index_file.write_all(&max_neighbor_count.to_be_bytes())?;
         index_file.write_all(&(0u32).to_be_bytes())?;
 
-        Ok(DiskStorage {
+        Ok(NaiveDisk {
             dimensions: dimensions,
             max_neighbour_count: max_neighbor_count,
+            next_node_index: 0,
             index_path: index_path.to_string(),
             free_path: free_path.to_string(),
         })
     }
-}
 
-impl GraphStorage for DiskStorage {
-    fn add_connections(&self, connections: &[(Node, Node)]) -> io::Result<()> {
-        println!("hello");
-        Ok(())
+    fn index_metadata_size(&self) -> usize {
+        std::mem::size_of_val(&self.dimensions)
+            + std::mem::size_of_val(&self.max_neighbour_count)
+            + std::mem::size_of_val(&self.next_node_index)
     }
 
-    fn add_nodes(&self, nodes: &[Node]) -> io::Result<()> {
-        // validate that all node's max connection is below max_neighbor_count
-        for node in nodes {
-            if node.connected.len() > self.max_neighbour_count as usize {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Node's connected exceeds max_neighbor_count",
-                ));
-            }
+    fn index_node_size(&self) -> usize {
+        // u32 for node indexes
+        std::mem::size_of::<u32>()
+            + (self.dimensions as usize * std::mem::size_of::<f32>())
+            + (self.max_neighbour_count as usize * std::mem::size_of::<u32>())
+    }
+
+    fn node_offset(&self, node_index: u32) -> u64 {
+        self.index_metadata_size() as u64 + (node_index as usize * self.index_node_size()) as u64
+    }
+
+    fn node_connections_offset(&self, node_index: u32) -> u64 {
+        self.node_offset(node_index)
+            + std::mem::size_of::<u32>() as u64
+            + (self.dimensions as usize * std::mem::size_of::<f32>()) as u64
+    }
+}
+
+impl GraphStorage for NaiveDisk {
+    fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> io::Result<()> {
+        if connections.len() > self.max_neighbour_count as usize {
+            return Err(Error::new(ErrorKind::Other, "max connections reached"));
         }
 
-        // write nodes to index file
-        // let mut index_file = BufWriter::new(File::open(&self.index_path)?);
-        let mut index_file = File::open(&self.index_path)?;
-        index_file.seek(SeekFrom::Current(
-            (std::mem::size_of::<u16>() + std::mem::size_of::<u8>() + std::mem::size_of::<u32>())
-                as i64,
+        let mut open_index_file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.index_path)?;
+
+        let mut index_file = BufWriter::new(&mut open_index_file);
+
+        index_file.seek(SeekFrom::Start(self.node_connections_offset(node_index)))?;
+
+        for neighbor in connections {
+            index_file.write_all(&neighbor.to_be_bytes())?;
+        }
+
+        // Pad neighbor indices
+        let padding = self.max_neighbour_count as usize - connections.len();
+        for _ in 0..padding {
+            index_file.write_all(&u32::MAX.to_be_bytes())?;
+        }
+        Ok(())
+    }
+    fn add_nodes(&mut self, data: &[Vec<f32>]) -> io::Result<Vec<u32>> {
+        let mut created_node_indices: Vec<u32> = Vec::new();
+
+        // jump to next node offset
+        let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
+        f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
+        f.seek(SeekFrom::Current(
+            (self.next_node_index as usize * self.index_node_size()) as i64,
         ))?;
 
-        for node in nodes {
-            // write node id
-            index_file.write_all(&(node.id).to_be_bytes())?;
+        let mut index_file = BufWriter::new(f);
 
-            // Write vector value
-            for &value in &node.vector {
+        // write nodes to index file
+        for datum in data {
+            let node_index = self.next_node_index;
+
+            // write node id
+            index_file.write_all(&(node_index).to_be_bytes())?;
+            for &value in datum {
                 index_file.write_all(&value.to_be_bytes())?;
             }
 
-            // Write neighbor indices
-            let mut neighbor_indices: Vec<u32> = node.connected.iter().map(|&x| x as u32).collect();
-            neighbor_indices.resize(self.max_neighbour_count.into(), u32::MAX); // Pad if needed
+            // Pad neighbor indices
+            let neighbor_indices: Vec<u32> = vec![u32::MAX; self.max_neighbour_count as usize];
             for &id in &neighbor_indices {
                 index_file.write_all(&id.to_be_bytes())?;
             }
+
+            created_node_indices.push(node_index);
+            self.next_node_index += 1
         }
-        Ok(())
-    }
-}
-pub(crate) fn write(db: &Graph, index_path: &str, data_path: &str) -> io::Result<()> {
-    // Write metadata to index file
-    index_file.write_all(&(VECTOR_DIMENSION as u16).to_be_bytes())?; // dimension
-
-    // Calculate max number of neighbors
-    let max_neighbors = db
-        .nodes
-        .iter()
-        .map(|node| node.connected.len())
-        .max()
-        .unwrap_or(0);
-    index_file.write_all(&(max_neighbors as u8).to_be_bytes())?; //  neighbor_count
-
-    // empty free list
-    index_file.write_all(&(0 as u32).to_be_bytes())?;
-
-    // Write nodes to data file and record offsets in index file
-    for node in &db.nodes {
-        // Write node_id and offset to index file
-        let offset = data_file.seek(SeekFrom::Current(0))?;
-        index_file.write_all(&(node.id as u32).to_be_bytes())?;
-        index_file.write_all(&(offset as u64).to_be_bytes())?;
-
-        // Write vector to data file
-        for &value in &node.vector {
-            data_file.write_all(&value.to_be_bytes())?;
-        }
-
-        // Write neighbor indices to data file
-        let mut neighbor_indices: Vec<u32> = node.connected.iter().map(|&x| x as u32).collect();
-        neighbor_indices.resize(max_neighbors, u32::MAX); // Pad if needed
-        for &id in &neighbor_indices {
-            data_file.write_all(&id.to_be_bytes())?;
-        }
+        Ok((created_node_indices))
     }
 
-    Ok(())
-}
+    fn get_node(&self, node_index: u32) -> io::Result<Node> {
+        let mut index_file = File::open(&self.index_path)?;
 
-pub(crate) fn load(index_path: &str, data_path: &str) -> io::Result<Graph> {
-    let mut index_file = File::open(index_path)?;
-    let mut data_file = File::open(data_path)?;
+        index_file.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
 
-    // Read metadata from index file
-    let mut dim_bytes = [0u8; 2];
-    index_file.read_exact(&mut dim_bytes)?;
-    let dimension = u16::from_be_bytes(dim_bytes) as usize;
-    assert_eq!(dimension, VECTOR_DIMENSION, "Dimension mismatch");
+        index_file.seek(SeekFrom::Current(
+            (node_index as usize * self.index_node_size()) as i64,
+        ))?;
 
-    let mut neighbor_count_bytes = [0u8; 1];
-    index_file.read_exact(&mut neighbor_count_bytes)?;
-    let neighbor_count = neighbor_count_bytes[0] as usize;
-
-    let mut free_list_len_bytes = [0u8; 4];
-    index_file.read_exact(&mut free_list_len_bytes)?;
-    let free_list_len = u32::from_be_bytes(free_list_len_bytes) as usize;
-
-    let mut free_list: Vec<u32> = vec![0u32; free_list_len];
-    if free_list_len > 0 {
-        for value in &mut free_list {
-            let mut bytes = [0u8; 4];
-            index_file.read_exact(&mut bytes)?;
-            *value = u32::from_be_bytes(bytes);
-        }
-    }
-
-    // Read node entries from index file
-    let mut nodes = Vec::new();
-    while let Ok(()) = (|| -> io::Result<()> {
         let mut node_id_bytes = [0u8; 4];
-        let mut offset_bytes = [0u8; 8];
-
         index_file.read_exact(&mut node_id_bytes)?;
-        index_file.read_exact(&mut offset_bytes)?;
-
-        let node_id = u32::from_be_bytes(node_id_bytes) as u32;
-        let offset = u64::from_be_bytes(offset_bytes);
-
-        // Seek to position in data file
-        data_file.seek(SeekFrom::Start(offset))?;
+        let node_id = u32::from_be_bytes(node_id_bytes);
 
         // Read vector
-        let mut vector = vec![0.0f32; dimension];
+        let mut vector = vec![0.0f32; self.dimensions as usize];
         for value in &mut vector {
             let mut bytes = [0u8; 4];
-            data_file.read_exact(&mut bytes)?;
+            index_file.read_exact(&mut bytes)?;
             *value = f32::from_be_bytes(bytes);
         }
 
         // Read neighbor indices
-        let mut connected = HashSet::new();
-        for _ in 0..neighbor_count {
+        let mut connected: HashSet<u32> = HashSet::new();
+        for _ in 0..self.max_neighbour_count {
             let mut neighbor_bytes = [0u8; 4];
-            data_file.read_exact(&mut neighbor_bytes)?;
+            index_file.read_exact(&mut neighbor_bytes)?;
             let neighbor_index = u32::from_be_bytes(neighbor_bytes);
 
             // Ignore padding
             if neighbor_index != u32::MAX {
-                connected.insert(neighbor_index as usize);
+                connected.insert(neighbor_index);
             }
         }
 
-        nodes.push(Node {
+        Ok(Node {
             id: node_id,
             vector: vector,
             connected: connected,
-        });
+        })
+    }
 
-        Ok(())
-    })() {}
-    // Continue reading nodes
-    Ok(Graph {
-        // nodes: nodes,
-        storage: Box::new(DiskStorage {}),
-    })
+    fn get_random_node(&self) -> Option<Node> {
+        let mut rng = rand::thread_rng();
+        let node_index: u32 = rng.gen_range(0..self.next_node_index);
+        self.get_node(node_index).ok()
+    }
+
+    fn get_all_node_indexes(&self) -> Vec<u32> {
+        // TODO: need to exclude free list nodes
+        let mut node_indexes = Vec::new();
+        for i in 0..self.next_node_index {
+            node_indexes.push(i);
+        }
+        node_indexes
+    }
+
+    fn get_all_nodes(&self) -> Vec<Node> {
+        let mut all_nodes = Vec::new();
+        for node_index in self.get_all_node_indexes() {
+            all_nodes.push(self.get_node(node_index).unwrap());
+        }
+        all_nodes
+    }
 }
-
 #[cfg(test)]
 mod tests {
-    use crate::storage::disk;
-
     use super::*;
-    use std::{env, fs};
+    use std::env;
 
     #[test]
-    fn test_graph_serialization() -> io::Result<()> {
-        // Create temporary directory for test files
+    fn test_add_nodes_and_get_node() {
         let temp_dir = env::temp_dir();
         let index_path = temp_dir.as_path().join("test.index");
-        let data_path = temp_dir.as_path().join("test.data");
+        let free_path = temp_dir.as_path().join("test.free");
 
-        // Create a test graph
-        let mut original_graph = Graph {
-            nodes: Vec::new(),
-            storage: Box::new(DiskStorage {}),
-        };
-
-        // Add some test nodes
-        let node1 = Node {
-            id: 100,
-            vector: vec![1.0, 2.0],
-            connected: [1, 2].iter().cloned().collect(),
-        };
-
-        let node2 = Node {
-            id: 200,
-            vector: vec![4.0, 5.0],
-            connected: [0, 2].iter().cloned().collect(),
-        };
-
-        let node3 = Node {
-            id: 300,
-            vector: vec![7.0, 8.0],
-            connected: [0, 1].iter().cloned().collect(),
-        };
-
-        original_graph.nodes.push(node1);
-        original_graph.nodes.push(node2);
-        original_graph.nodes.push(node3);
-
-        // Save the graph
-        disk::write(
-            &original_graph,
+        // Create a DiskStorage instance
+        let mut disk_storage = NaiveDisk::new(
+            2,
+            3,
             index_path.to_str().unwrap(),
-            data_path.to_str().unwrap(),
+            free_path.to_str().unwrap(),
         )
         .unwrap();
 
-        // Load the graph back
-        let loaded_graph = disk::load(index_path.to_str().unwrap(), data_path.to_str().unwrap())?;
+        // Add nodes to the storage
+        let ids = disk_storage
+            .add_nodes(&[vec![1.0, 2.0], vec![3.0, 4.0]])
+            .unwrap();
 
-        // Assert the graphs are equal
-        assert_eq!(original_graph.nodes.len(), loaded_graph.nodes.len());
+        assert_eq!(ids, vec![0, 1]);
+        disk_storage
+            .set_connections(0, &HashSet::from([1u32]))
+            .unwrap();
+        disk_storage
+            .set_connections(1, &HashSet::from([0u32]))
+            .unwrap();
 
-        for (original_node, loaded_node) in
-            original_graph.nodes.iter().zip(loaded_graph.nodes.iter())
-        {
-            // Compare vectors
-            assert_eq!(original_node.vector, loaded_node.vector);
+        // Retrieve nodes and verify
+        let retrieved_node1 = disk_storage.get_node(0).unwrap();
+        let retrieved_node2 = disk_storage.get_node(1).unwrap();
 
-            // Compare connected sets
-            assert_eq!(original_node.connected, loaded_node.connected);
-        }
+        assert_eq!(0, retrieved_node1.id);
+        assert_eq!(vec![1.0, 2.0], retrieved_node1.vector);
+        assert_eq!(HashSet::from([1]), retrieved_node1.connected);
 
-        // Verify file sizes
-        let index_metadata_size =
-            std::mem::size_of::<u16>() + std::mem::size_of::<u8>() + std::mem::size_of::<u32>();
-        let index_entry_size = std::mem::size_of::<u32>() + std::mem::size_of::<u64>();
-        let expected_index_size =
-            index_metadata_size + (index_entry_size * original_graph.nodes.len());
-
-        let vector_size = VECTOR_DIMENSION * std::mem::size_of::<f32>();
-        let max_neighbors = 2; // Based on our test data
-        let neighbors_size = max_neighbors * std::mem::size_of::<u32>();
-        let expected_data_size = (vector_size + neighbors_size) * original_graph.nodes.len();
-
-        assert_eq!(
-            fs::metadata(&index_path)?.len() as usize,
-            expected_index_size
-        );
-        assert_eq!(fs::metadata(&data_path)?.len() as usize, expected_data_size);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_empty_graph() -> io::Result<()> {
-        let temp_dir = env::temp_dir();
-        let index_path = temp_dir.as_path().join("empty.index");
-        let data_path = temp_dir.as_path().join("empty.data");
-
-        let empty_graph = Graph {
-            nodes: Vec::new(),
-            storage: Box::new(DiskStorage {}),
-        };
-
-        disk::write(
-            &empty_graph,
-            index_path.to_str().unwrap(),
-            data_path.to_str().unwrap(),
-        )?;
-
-        let loaded_graph = disk::load(index_path.to_str().unwrap(), data_path.to_str().unwrap())?;
-
-        assert_eq!(empty_graph.nodes.len(), loaded_graph.nodes.len());
-        assert_eq!(loaded_graph.nodes.len(), 0);
-
-        Ok(())
+        assert_eq!(1, retrieved_node2.id);
+        assert_eq!(vec![3.0, 4.0], retrieved_node2.vector);
+        assert_eq!(HashSet::from([0]), retrieved_node2.connected);
     }
 }

@@ -7,7 +7,6 @@ use std::{
 };
 
 pub(crate) struct Graph {
-    // pub(crate) nodes: Vec<Node>,
     pub(crate) storage: Box<dyn GraphStorage>,
 }
 
@@ -24,40 +23,53 @@ impl Graph {
     /// # Returns
     ///
     /// A new `Graph` with the specified properties.
-    pub(super) fn new(input: Vec<&[f32]>, r: usize, store: Box<dyn GraphStorage>) -> Self {
-        let mut nodes = input
-            .iter()
-            .enumerate()
-            .map(|(i, vector)| Node {
-                id: i as u32,
-                vector: vector.to_vec(),
-                connected: HashSet::new(),
-            })
-            .collect::<Vec<Node>>();
+    pub(super) fn new(
+        input: &[Vec<f32>],
+        r: usize,
+        max_neighbour_count: u8,
+        mut store: Box<dyn GraphStorage>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let new_nodes_indices = store.add_nodes(input)?;
+        let mut new_nodes: Vec<Node> = Vec::new();
 
-        let total_size = nodes.len();
+        for i in 0..new_nodes_indices.len() {
+            let node_index = new_nodes_indices[i];
+            let node = Node {
+                id: node_index,
+                vector: input[i].clone(),
+                connected: HashSet::new(),
+            };
+            new_nodes.push(node);
+        }
 
         // for each node, connect it to random r nodes
-        for i in 0..nodes.len() {
+        for i in 0..new_nodes.len() {
             for _ in 0..r {
-                if nodes[i].connected.len() >= r {
+                if new_nodes[i].connected.len() >= max_neighbour_count as usize {
                     continue;
                 }
                 loop {
-                    let random_index = thread_rng().gen_range(0..total_size);
-                    if random_index != i {
-                        nodes[i].connected.insert(random_index);
-                        nodes[random_index].connected.insert(i);
+                    let random_index = thread_rng().gen_range(0..new_nodes.len());
+                    if random_index != i
+                        && new_nodes[random_index].connected.len() < max_neighbour_count as usize
+                    {
+                        let random_node_id = new_nodes[random_index].id.clone();
+                        new_nodes[i].connected.insert(random_node_id);
+                        let i_node_id = new_nodes[i].id.clone();
+                        new_nodes[random_index].connected.insert(i_node_id);
                         break;
                     }
                 }
             }
         }
 
-        Graph {
-            // nodes: nodes,
-            storage: store,
-        }
+        // println!("New nodes: {:?}", new_nodes);
+
+        new_nodes.iter().for_each(|n| {
+            store.set_connections(n.id, &n.connected).unwrap();
+        });
+
+        Ok(Graph { storage: store })
     }
 
     /// Performs a greedy search starting from a given node index to find the k closest nodes
@@ -77,31 +89,33 @@ impl Graph {
     /// * A set of indices of nodes that were visited during the search.
     pub(super) fn greedy_search(
         &self,
-        start_node_index: usize,
+        start_node_index: u32,
         query_node: &[f32],
         k: usize,
         search_list_size: usize,
-    ) -> (Vec<usize>, HashSet<usize>) {
-        let mut closest_l: BinaryHeap<(i64, usize)> = BinaryHeap::new();
-        let mut visited: HashSet<usize> = HashSet::new();
+    ) -> (Vec<u32>, HashSet<u32>) {
+        let mut closest_l: BinaryHeap<(i64, u32)> = BinaryHeap::new();
+        let mut visited: HashSet<u32> = HashSet::new();
         // .0 is the distance from query_node_index, .1 is the index of the node
-        let mut to_visit: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
+        let mut to_visit: BinaryHeap<Reverse<(i64, u32)>> = BinaryHeap::new();
 
+        let start_node = self.storage.get_node(start_node_index).unwrap();
         // Initial distance
-        let start_node_distance =
-            euclidean_distance(query_node, &self.nodes[start_node_index].vector);
+        let start_node_distance = euclidean_distance(query_node, &start_node.vector);
         to_visit.push(Reverse((start_node_distance, start_node_index)));
         closest_l.push((start_node_distance, start_node_index));
 
         while let Some(Reverse((_, visiting))) = to_visit.pop() {
             visited.insert(visiting);
 
-            for neighbor in &self.nodes[visiting].connected {
+            let visiting_node = self.storage.get_node(visiting).unwrap();
+            for neighbor in &visiting_node.connected {
                 if visited.contains(neighbor) {
                     continue;
                 }
 
-                let distance_to_q = euclidean_distance(&self.nodes[*neighbor].vector, query_node);
+                let visiting_node_neighbor = self.storage.get_node(*neighbor).unwrap();
+                let distance_to_q = euclidean_distance(&visiting_node_neighbor.vector, query_node);
 
                 closest_l.push((distance_to_q, *neighbor));
             }
@@ -120,7 +134,7 @@ impl Graph {
             })
         }
 
-        let k_closests: Vec<usize> = closest_l
+        let k_closests: Vec<u32> = closest_l
             .into_sorted_vec()
             .iter()
             .take(k)
@@ -132,74 +146,100 @@ impl Graph {
 
     pub(super) fn robust_prune(
         &mut self,
-        p_index: usize,
-        visited: &HashSet<usize>,
-        distance_threshold: i64,
+        p_index: u32,
+        visited: &HashSet<u32>,
+        distance_threshold: f32,
         degree_bound: usize,
-    ) {
-        // add all nodes that was visited to try to reach p (exclusing p) into working set
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // add all nodes that was visited to try to reach p (excluding p) into working set
         let mut working_set = visited.clone();
         working_set.retain(|x| *x != p_index);
 
         // add all nodes connected to p into working set
-        working_set.extend(self.nodes[p_index].connected.iter());
+        let p_node = self.storage.get_node(p_index).unwrap();
 
-        let mut distance_heap: BinaryHeap<Reverse<(i64, usize)>> = BinaryHeap::new();
+        working_set.extend(p_node.connected.iter());
+
+        let mut distance_heap: BinaryHeap<Reverse<(i64, u32)>> = BinaryHeap::new();
         for node_index in working_set.iter() {
-            let distance_from_p =
-                euclidean_distance(&self.nodes[p_index].vector, &self.nodes[*node_index].vector);
+            let working_set_node = self.storage.get_node(*node_index).unwrap();
+            let distance_from_p = euclidean_distance(&p_node.vector, &working_set_node.vector);
             distance_heap.push(Reverse((distance_from_p, *node_index)));
         }
 
         // reset p's connected
-        self.nodes[p_index].connected.clear();
+        let mut p_node_connections: HashSet<u32> = HashSet::new();
 
-        while let Some(Reverse((_, min_node))) = distance_heap.pop() {
+        while let Some(Reverse((_, min_node_index))) = distance_heap.pop() {
             // add min_node to p_index's connected
             // note: the reverse connection is added by the caller of this method
-            self.nodes[p_index].connected.insert(min_node);
-            if self.nodes[p_index].connected.len() == degree_bound {
+            p_node_connections.insert(min_node_index);
+            // println!(
+            //     "p_node: {}, p_node_connections: {}",
+            //     p_node.id,
+            //     p_node_connections.len()
+            // );
+            if p_node_connections.len() == degree_bound {
                 break;
             }
 
-            let min_node_vector = self.nodes[min_node].vector.clone();
+            let min_node = self.storage.get_node(min_node_index).unwrap();
+
             distance_heap.retain(|x| {
+                let comparison_node = self.storage.get_node(x.0 .1).unwrap();
+
                 let distance_to_min_node =
-                    euclidean_distance(&min_node_vector, &self.nodes[x.0 .1].vector);
+                    euclidean_distance(&min_node.vector, &comparison_node.vector) as f64;
                 let distance_to_p =
-                    euclidean_distance(&self.nodes[x.0 .1].vector, &self.nodes[p_index].vector);
-                distance_to_min_node * distance_threshold > distance_to_p
+                    euclidean_distance(&comparison_node.vector, &p_node.vector) as f64;
+                distance_to_min_node * distance_threshold as f64 > distance_to_p
             });
         }
+
+        self.storage.set_connections(p_index, &p_node_connections)?;
+
+        Ok(())
     }
 
-    pub(super) fn index(&mut self, distance_threshold: i64, degree_bound: usize) {
-        let start_node_index = thread_rng().gen_range(0..self.nodes.len());
+    pub(super) fn index(
+        &mut self,
+        distance_threshold: f32,
+        degree_bound: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let start_node = self.storage.get_random_node().unwrap();
+        let start_node_index = start_node.id;
 
-        let mut nodes: Vec<usize> = (0..self.nodes.len()).collect();
+        let mut node_indices: Vec<u32> = self.storage.get_all_node_indexes();
         let mut rng = thread_rng();
-        nodes.shuffle(&mut rng);
+        node_indices.shuffle(&mut rng);
 
-        for node in nodes {
-            let (_, visited) =
-                self.greedy_search(start_node_index, &self.nodes[node].vector, 3, 10);
-            self.robust_prune(node, &visited, 1, degree_bound);
+        for node_index in node_indices {
+            let query_node = self.storage.get_node(node_index)?;
+            let (_, visited) = self.greedy_search(start_node_index, &query_node.vector, 3, 10);
 
-            let connected_nodes = self.nodes[node].connected.clone();
-            for connected_node in connected_nodes.iter() {
-                self.nodes[*connected_node].connected.insert(node);
+            self.robust_prune(node_index, &visited, distance_threshold, degree_bound)?;
+            let query_node = self.storage.get_node(node_index).unwrap();
 
-                let connected_node_outgoing = self.nodes[*connected_node].connected.clone();
-                if self.nodes[*connected_node].connected.len() > degree_bound {
+            let connected_node_indices = query_node.connected.clone();
+            for connected_node_index in connected_node_indices.iter() {
+                let mut connected_node = self.storage.get_node(*connected_node_index).unwrap();
+                connected_node.connected.insert(node_index);
+
+                if connected_node.connected.len() > degree_bound {
                     self.robust_prune(
-                        *connected_node,
-                        &connected_node_outgoing,
+                        *connected_node_index,
+                        &connected_node.connected,
                         distance_threshold,
                         degree_bound,
-                    );
+                    )?;
+                } else {
+                    self.storage
+                        .set_connections(*connected_node_index, &connected_node.connected)?;
                 }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -207,7 +247,7 @@ impl Graph {
 pub(crate) struct Node {
     pub(crate) id: u32,
     pub(crate) vector: Vec<f32>,
-    pub(crate) connected: HashSet<usize>,
+    pub(crate) connected: HashSet<u32>,
 }
 fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
     let mut squared_distance: f32 = 0.0;

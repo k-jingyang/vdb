@@ -49,7 +49,7 @@ impl Plotter {
         for i in 0..self.all_nodes.len() {
             let point_1 = &self.all_nodes[i].vector;
             for connected_node in self.all_nodes[i].connected.iter() {
-                let point_2 = &self.all_nodes[*connected_node].vector;
+                let point_2 = &self.all_nodes[*connected_node as usize].vector;
                 let connected_points = vec![(point_1[0], point_1[1]), (point_2[0], point_2[1])];
                 chart.draw_series(LineSeries::new(connected_points, RED))?;
             }
