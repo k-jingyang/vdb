@@ -1,13 +1,14 @@
 use crate::storage::GraphStorage;
-use rand::{seq::SliceRandom, thread_rng, Rng};
+use rand::{random, seq::SliceRandom, thread_rng, Rng};
 
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashSet},
 };
 
-pub(crate) struct Graph {
+pub struct Graph {
     pub(crate) storage: Box<dyn GraphStorage>,
+    pub(crate) max_neighbour_count: usize,
 }
 
 impl Graph {
@@ -23,7 +24,7 @@ impl Graph {
     /// # Returns
     ///
     /// A new `Graph` with the specified properties.
-    pub(super) fn new(
+    pub fn new(
         input: &[Vec<f32>],
         r: usize,
         max_neighbour_count: u8,
@@ -69,7 +70,22 @@ impl Graph {
             store.set_connections(n.id, &n.connected).unwrap();
         });
 
-        Ok(Graph { storage: store })
+        Ok(Graph {
+            storage: store,
+            max_neighbour_count: max_neighbour_count as usize,
+        })
+    }
+
+    pub fn greedy_search_random_start(
+        &self,
+        query_node: &[f32],
+        k: usize,
+        search_list_size: usize,
+    ) -> (Vec<u32>, HashSet<u32>) {
+        let all_node_indexes = self.storage.get_all_node_indexes();
+        let random_index = *all_node_indexes.choose(&mut thread_rng()).unwrap();
+
+        self.greedy_search(random_index, query_node, k, search_list_size)
     }
 
     /// Performs a greedy search starting from a given node index to find the k closest nodes
@@ -87,7 +103,7 @@ impl Graph {
     /// A tuple containing:
     /// * A vector of indices of the k closest nodes to the query node.
     /// * A set of indices of nodes that were visited during the search.
-    pub(super) fn greedy_search(
+    pub fn greedy_search(
         &self,
         start_node_index: u32,
         query_node: &[f32],
@@ -201,11 +217,7 @@ impl Graph {
         Ok(())
     }
 
-    pub(super) fn index(
-        &mut self,
-        distance_threshold: f32,
-        degree_bound: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn index(&mut self, distance_threshold: f32) -> Result<(), Box<dyn std::error::Error>> {
         let start_node = self.storage.get_random_node().unwrap();
         let start_node_index = start_node.id;
 
@@ -217,7 +229,12 @@ impl Graph {
             let query_node = self.storage.get_node(node_index)?;
             let (_, visited) = self.greedy_search(start_node_index, &query_node.vector, 3, 10);
 
-            self.robust_prune(node_index, &visited, distance_threshold, degree_bound)?;
+            self.robust_prune(
+                node_index,
+                &visited,
+                distance_threshold,
+                self.max_neighbour_count,
+            )?;
             let query_node = self.storage.get_node(node_index).unwrap();
 
             let connected_node_indices = query_node.connected.clone();
@@ -225,12 +242,12 @@ impl Graph {
                 let mut connected_node = self.storage.get_node(*connected_node_index).unwrap();
                 connected_node.connected.insert(node_index);
 
-                if connected_node.connected.len() > degree_bound {
+                if connected_node.connected.len() > self.max_neighbour_count {
                     self.robust_prune(
                         *connected_node_index,
                         &connected_node.connected,
                         distance_threshold,
-                        degree_bound,
+                        self.max_neighbour_count,
                     )?;
                 } else {
                     self.storage
@@ -244,7 +261,7 @@ impl Graph {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Node {
+pub struct Node {
     pub(crate) id: u32,
     pub(crate) vector: Vec<f32>,
     pub(crate) connected: HashSet<u32>,

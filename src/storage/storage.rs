@@ -1,6 +1,6 @@
 use std::{collections::HashSet, io};
 
-use crate::graph::{Graph, Node};
+use crate::graph::Node;
 
 pub trait GraphStorage {
     // fn add_connections(&self, connections: &[(u32, u32)]) -> io::Result<()>;

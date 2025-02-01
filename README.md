@@ -20,13 +20,11 @@ The blue points is the top 3 results from trying to `greedy_search(1000.0,1000.0
 
 ## Storage backends benchmarks
 
-|  Storage  |  greedy_search()     |  index()   |
-|  ---  |  ---  |  ---  |
-|  In-mem     |       |       |
-|  Naive disk   |       |       |
-|  io_uring     |       |       |
-
-
+| Storage    | greedy_search() | index() |
+|------------|-----------------|---------|
+| In-mem     |                 |         |
+| Naive disk |                 |         |
+| io_uring   |                 |         |
 
 ## Objective of project
 

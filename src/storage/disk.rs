@@ -14,7 +14,7 @@ use std::{
 
 use super::storage::GraphStorage;
 // disk layout
-// principle: lookup for each node index must be O(1)
+// key principle: lookup for each node index must be O(1)
 //
 // .free file:
 // [free indices]
@@ -46,7 +46,7 @@ pub struct NaiveDisk {
 impl NaiveDisk {
     // initialise a new disk backend
     // TODO: allow reading old copy
-    pub(crate) fn new(
+    pub fn new(
         dimensions: u16,
         max_neighbor_count: u8,
         index_path: &str,
@@ -149,7 +149,7 @@ impl GraphStorage for NaiveDisk {
             created_node_indices.push(node_index);
             self.next_node_index += 1
         }
-        Ok((created_node_indices))
+        Ok(created_node_indices)
     }
 
     fn get_node(&self, node_index: u32) -> io::Result<Node> {

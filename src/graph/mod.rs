@@ -1,6 +1,7 @@
 pub mod graph;
 pub mod plotter;
 pub mod vamana;
+pub mod vector;
 
-pub(crate) use graph::Graph;
-pub(crate) use graph::Node;
+pub use graph::Graph;
+pub use graph::Node;
