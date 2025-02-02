@@ -1,18 +1,17 @@
 #![warn(unused_extern_crates)]
-use polars::{
-    export::{arrow::array::ListArray, num::ToPrimitive},
-    prelude::*,
-};
+use polars::{export::num::ToPrimitive, prelude::*};
 
+// Read 38461 vectors of dimension: 1536
+// Graph::new took 311.465645ms
+// Graph::index took 29.09226692s
 fn main() {
-    // vdb::vamana::init();
-    let res = read_dataset(
-        "dataset/dbpedia-entities-openai-1M/train-00000-of-00026-3c7b99d1c7eda36e.parquet",
-    )
-    .unwrap();
-
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
+    // vdb::vamana::init();
+    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1).unwrap();
+    println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
+
+    let start = std::time::Instant::now();
     let mut in_mem_graph = vdb::graph::Graph::new(
         &res,
         2,
@@ -20,30 +19,41 @@ fn main() {
         Box::new(vdb::storage::InMemStorage::new()),
     )
     .unwrap();
+    println!("Graph::new took {:?}", start.elapsed());
 
-    println!("created graph");
+    let start = std::time::Instant::now();
     in_mem_graph.index(1.2).unwrap();
+    println!("Graph::index took {:?}", start.elapsed());
 }
 
-fn read_dataset(dataset_file: &str) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+fn read_dataset(
+    dataset_path: &str,
+    ingest_files: i64,
+) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+    let mut paths = Vec::new();
+    for entry in std::fs::read_dir(dataset_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() && path.extension().unwrap() == "parquet" {
+            if ingest_files >= 0 && paths.len() == ingest_files as usize {
+                break;
+            }
+            paths.push(path.to_str().unwrap().to_string());
+        }
+    }
+
     let args = ScanArgsParquet::default();
 
-    let df = LazyFrame::scan_parquet(dataset_file, ScanArgsParquet::default())?.collect()?;
-    // Assuming the column name is "list_column"
-    let list_column = df.column("openai")?.list()?;
-
-    // Initialize the result vector
-    let mut result: Vec<Vec<f32>> = Vec::new();
-
-    // Iterate over the list column
-    for arr in list_column.into_iter() {
-        let series = arr.ok_or("series not found")?;
-        let arr_value = series.f64()?;
-        let vec: Vec<f32> = arr_value
-            .into_iter()
-            .map(|opt| opt.unwrap_or(0.0).to_f32().unwrap_or(0.0))
-            .collect();
-        result.push(vec);
+    let mut result = Vec::new();
+    for path in paths {
+        let df = LazyFrame::scan_parquet(path.as_str(), args.clone())?.collect()?;
+        let list_column = df.column("openai")?.list()?;
+        for arr in list_column.into_iter() {
+            let series = arr.ok_or("series not found")?;
+            let arr_value = series.f64()?;
+            let vec: Vec<f32> = arr_value.into_iter().filter_map(|x| x?.to_f32()).collect();
+            result.push(vec);
+        }
     }
 
     Ok(result)

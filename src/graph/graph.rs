@@ -64,8 +64,6 @@ impl Graph {
             }
         }
 
-        // println!("New nodes: {:?}", new_nodes);
-
         new_nodes.iter().for_each(|n| {
             store.set_connections(n.id, &n.connected).unwrap();
         });
