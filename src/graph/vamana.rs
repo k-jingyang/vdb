@@ -1,3 +1,7 @@
+use std::fs;
+
+use chrono::Local;
+
 use crate::{
     constant::{MAX_NEIGHBOUR_COUNT, SEED_DATASET_SIZE, VECTOR_DIMENSION, VECTOR_VALUE_RANGE},
     graph::Node,
@@ -32,8 +36,11 @@ pub fn init() {
         .collect();
     plotter.set_isolated_nodes(&closest_nodes);
 
+    let path = format!("static/{}/", Local::now().format("%Y-%m-%d"));
+    fs::create_dir_all(&path).unwrap();
+
     plotter
-        .plot("static/graph-initial.png", "Initial graph")
+        .plot(&format!("{}/graph-initial.png", path), "Initial graph")
         .unwrap();
 
     // alpha=1
@@ -46,7 +53,7 @@ pub fn init() {
     plotter.set_isolated_nodes(&closest_nodes);
     plotter.set_connected_nodes(&graph.storage.get_all_nodes());
     plotter
-        .plot("static/graph-1.png", "first pass, α=1")
+        .plot(&format!("{}/graph-1.png", path), "first pass, α=1")
         .unwrap();
 
     // alpha=1.2
@@ -59,7 +66,7 @@ pub fn init() {
     plotter.set_isolated_nodes(&closest_nodes);
     plotter.set_connected_nodes(&graph.storage.get_all_nodes());
     plotter
-        .plot("static/graph-2.png", "second pass, α=1.2")
+        .plot(&format!("{}/graph-2.png", path), "second pass, α=1.2")
         .unwrap();
     // disk::write_to_disk(&graph);
 }
