@@ -80,6 +80,8 @@ fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
 
 The full in-mem indexing's latency now takes around `40s~47s`, about a 5x improvement. From the updated flamegraph, we can also see that `euclidean_distance` is no longer hogging the CPU time.
 
+- Reading the dataset became the dominating factor
+
 <img src="static/after_simd_flamegraph.svg" alt="flamegraph" width="100%">
 
 > See the `vdb::graph::graph::Graph::Index` trace
