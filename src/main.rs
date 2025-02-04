@@ -1,14 +1,11 @@
 #![warn(unused_extern_crates)]
 use polars::{export::num::ToPrimitive, prelude::*};
 
-// Read 38461 vectors of dimension: 1536
-// Graph::new took 311.465645ms
-// Graph::index took 29.09226692s
 fn main() {
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
     // vdb::vamana::init();
-    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1).unwrap();
+    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1).unwrap();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
 
     let start = std::time::Instant::now();

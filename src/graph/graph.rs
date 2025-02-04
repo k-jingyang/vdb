@@ -1,5 +1,6 @@
 use crate::storage::GraphStorage;
-use rand::{random, seq::SliceRandom, thread_rng, Rng};
+use rand::{seq::SliceRandom, thread_rng, Rng};
+use simsimd::SpatialSimilarity;
 
 use std::{
     cmp::Reverse,
@@ -12,18 +13,6 @@ pub struct Graph {
 }
 
 impl Graph {
-    /// Creates a new graph from the given input vectors. The graph is a random graph
-    /// where each node is connected to `r` other nodes. The graph is undirected and
-    /// unweighted.
-    ///
-    /// # Arguments
-    ///
-    /// * `input` - A vector of vectors representing the vectors to create nodes from.
-    /// * `r` - The number of random nodes to connect each node to.
-    ///
-    /// # Returns
-    ///
-    /// A new `Graph` with the specified properties.
     pub fn new(
         input: &[Vec<f32>],
         r: usize,
@@ -82,25 +71,9 @@ impl Graph {
     ) -> (Vec<u32>, HashSet<u32>) {
         let all_node_indexes = self.storage.get_all_node_indexes();
         let random_index = *all_node_indexes.choose(&mut thread_rng()).unwrap();
-
         self.greedy_search(random_index, query_node, k, search_list_size)
     }
 
-    /// Performs a greedy search starting from a given node index to find the k closest nodes
-    /// to a query node based on their vector distances.
-    ///
-    /// # Arguments
-    ///
-    /// * `start_node_index` - The index of the node to start the search from.
-    /// * `query_node` - The vector representing the query node.
-    /// * `k` - The number of closest nodes to find.
-    /// * `search_list_size` - The maximum size of the search list maintained during the search.
-    ///
-    /// # Returns
-    ///
-    /// A tuple containing:
-    /// * A vector of indices of the k closest nodes to the query node.
-    /// * A set of indices of nodes that were visited during the search.
     pub fn greedy_search(
         &self,
         start_node_index: u32,
@@ -139,7 +112,6 @@ impl Graph {
                 closest_l.pop();
             }
 
-            // note: super wasteful here
             to_visit.clear();
             closest_l.iter().for_each(|node| {
                 if !visited.contains(&node.1) {
@@ -188,11 +160,6 @@ impl Graph {
             // add min_node to p_index's connected
             // note: the reverse connection is added by the caller of this method
             p_node_connections.insert(min_node_index);
-            // println!(
-            //     "p_node: {}, p_node_connections: {}",
-            //     p_node.id,
-            //     p_node_connections.len()
-            // );
             if p_node_connections.len() == degree_bound {
                 break;
             }
@@ -264,11 +231,8 @@ pub struct Node {
     pub(crate) vector: Vec<f32>,
     pub(crate) connected: HashSet<u32>,
 }
+
 fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
-    let mut squared_distance: f32 = 0.0;
-    for i in 0..a.len() {
-        let difference = a[i] - b[i];
-        squared_distance += difference * difference;
-    }
-    squared_distance.sqrt() as i64
+    let l2sq_dist = f32::l2sq(a, b);
+    return l2sq_dist.unwrap() as i64;
 }

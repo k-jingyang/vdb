@@ -1924,6 +1924,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "simsimd"
+version = "6.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e987bb0efe482ab4521d3c9fa11b6dfafbbc04ce5d5ee13735ba127666df344d"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2107,6 +2116,7 @@ dependencies = [
  "plotters",
  "polars",
  "rand",
+ "simsimd",
 ]
 
 [[package]]
