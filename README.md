@@ -47,9 +47,9 @@ Using only in-mem indexing, the full indexing's latency came at `200s ~ 250s`
 
 To identify the bottleneck, I used [cargo flamegraph](https://github.com/flamegraph-rs/flamegraph) to profile the indexing on just 1 parquet file of the dataset (i.e. 38k of 1536 dimension vectors).
 
-<img src="static/before_simd_euclidean_distance_flamegraph.svg" alt="flamegraph" width="75%">
+<img src="static/before_simd_euclidean_distance_flamegraph.svg" alt="flamegraph" width="100%">
 
-> See the trace vdb::graph::graph::Graph::Index trace
+> See the `vdb::graph::graph::Graph::Index` trace
 
 We can see that `euclidean_distance` takes up the majority of CPU time in `greedy_search` and `robust_prune`.
 My simple implementation below scales linearly with the no. of dimensions. Hence, it's slow for our 1536 dimension dataset.
@@ -80,9 +80,9 @@ fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
 
 The full in-mem indexing's latency now takes around `40s~47s`, about a 5x improvement. From the updated flamegraph, we can also see that `euclidean_distance` is no longer hogging the CPU time.
 
-<img src="static/after_simd_flamegraph.svg" alt="flamegraph" width="75%">
+<img src="static/after_simd_flamegraph.svg" alt="flamegraph" width="100%">
 
-> See the trace vdb::graph::graph::Graph::Index trace
+> See the `vdb::graph::graph::Graph::Index` trace
 
 ## Benchmarking
 
