@@ -1,11 +1,16 @@
 #![warn(unused_extern_crates)]
 use polars::{export::num::ToPrimitive, prelude::*};
 
+// 1000 vectors of 1536 dimensions
+// in-mem indexing: 19ms
+// disk indexing: 22s
+// difference is 1000x
 fn main() {
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
     // vdb::vamana::init();
-    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1).unwrap();
+    let res =
+        read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1).unwrap()[0..1000].to_vec();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
 
     let start = std::time::Instant::now();
@@ -16,11 +21,34 @@ fn main() {
         Box::new(vdb::storage::InMemStorage::new()),
     )
     .unwrap();
-    println!("Graph::new took {:?}", start.elapsed());
+    println!("In-mem graph::new took {:?}", start.elapsed());
 
     let start = std::time::Instant::now();
     in_mem_graph.index(1.2).unwrap();
-    println!("Graph::index took {:?}", start.elapsed());
+    println!("In-mem graph::index took {:?}", start.elapsed());
+
+    let start = std::time::Instant::now();
+    in_mem_graph.index(1.2).unwrap();
+    let mut disk_graph = vdb::graph::Graph::new(
+        &res,
+        2,
+        MAX_NEIGHBOUR_COUNT,
+        Box::new(
+            vdb::storage::NaiveDisk::new(
+                res[0].len() as u16,
+                MAX_NEIGHBOUR_COUNT,
+                "disk.index",
+                "disk.free",
+            )
+            .unwrap(),
+        ),
+    )
+    .unwrap();
+    println!("Disk graph::new took {:?}", start.elapsed());
+
+    let start = std::time::Instant::now();
+    disk_graph.index(1.2).unwrap();
+    println!("Disk graph::index took {:?}", start.elapsed());
 }
 
 fn read_dataset(
