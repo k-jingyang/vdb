@@ -5,12 +5,15 @@ use polars::{export::num::ToPrimitive, prelude::*};
 // in-mem indexing: 19ms
 // disk indexing: 22s
 // difference is 1000x
+// after opimitisation of single read:
+// disk indexing: 227ms
 fn main() {
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
     // vdb::vamana::init();
-    let res =
-        read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1).unwrap()[0..1000].to_vec();
+    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1)
+        .unwrap()
+        .to_vec();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
 
     let start = std::time::Instant::now();
