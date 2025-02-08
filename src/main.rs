@@ -7,11 +7,18 @@ use polars::{export::num::ToPrimitive, prelude::*};
 // difference is 1000x
 // after opimitisation of single read:
 // disk indexing: 227ms
+//
+
+// Read 1000000 vectors of dimension: 1536
+// In-mem graph::new took 324.854365107s
+// In-mem graph::index took 46.901828688s
+// Disk graph::new took 194.129564367s
+// Disk graph::index took 1635.210504063s
 fn main() {
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
     // vdb::vamana::init();
-    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1)
+    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1)
         .unwrap()
         .to_vec();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
