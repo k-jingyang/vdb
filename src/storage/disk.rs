@@ -155,30 +155,38 @@ impl GraphStorage for NaiveDisk {
     fn get_node(&self, node_index: u32) -> io::Result<Node> {
         let mut index_file = File::open(&self.index_path)?;
 
-        index_file.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
-
         index_file.seek(SeekFrom::Current(
-            (node_index as usize * self.index_node_size()) as i64,
+            self.index_metadata_size() as i64
+                + (node_index as usize * self.index_node_size()) as i64,
         ))?;
 
-        let mut node_id_bytes = [0u8; 4];
-        index_file.read_exact(&mut node_id_bytes)?;
-        let node_id = u32::from_be_bytes(node_id_bytes);
+        let mut buffer = vec![0u8; self.index_node_size()];
+        index_file.read_exact(&mut buffer)?;
+        let node_id = u32::from_be_bytes(buffer[0..4].try_into().unwrap());
 
         // Read vector
-        let mut vector = vec![0.0f32; self.dimensions as usize];
-        for value in &mut vector {
-            let mut bytes = [0u8; 4];
-            index_file.read_exact(&mut bytes)?;
-            *value = f32::from_be_bytes(bytes);
+        let mut vector: Vec<f32> = Vec::new();
+        for i in 0..self.dimensions {
+            let vector_offset_start = 4 + i as usize * 4;
+            let vector_offset_end = vector_offset_start + 4; // f32 = 4 bytes
+            let vector_val = f32::from_be_bytes(
+                buffer[vector_offset_start..vector_offset_end]
+                    .try_into()
+                    .unwrap(),
+            );
+            vector.push(vector_val);
         }
 
         // Read neighbor indices
         let mut connected: HashSet<u32> = HashSet::new();
-        for _ in 0..self.max_neighbour_count {
-            let mut neighbor_bytes = [0u8; 4];
-            index_file.read_exact(&mut neighbor_bytes)?;
-            let neighbor_index = u32::from_be_bytes(neighbor_bytes);
+        for i in 0..self.max_neighbour_count {
+            let neighbor_offset_start = 4 + self.dimensions as usize * 4 + i as usize * 4;
+            let neighbor_offset_end = neighbor_offset_start + 4; // u32 = 4 bytes
+            let neighbor_index = u32::from_be_bytes(
+                buffer[neighbor_offset_start..neighbor_offset_end]
+                    .try_into()
+                    .unwrap(),
+            );
 
             // Ignore padding
             if neighbor_index != u32::MAX {
