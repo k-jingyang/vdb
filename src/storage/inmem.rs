@@ -1,4 +1,7 @@
-use std::{collections::HashSet, io};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+};
 
 use rand::Rng;
 
@@ -40,7 +43,9 @@ impl GraphStorage for InMemStorage {
 
     fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> io::Result<()> {
         if let Some(node) = self.nodes.get_mut(node_index as usize) {
+            println!("before: {:?}, connections: {:?}", node, connections);
             node.connected = connections.clone();
+            println!("after: {:?}", node);
             Ok(())
         } else {
             Err(io::Error::new(io::ErrorKind::NotFound, "Node not found"))
@@ -48,20 +53,24 @@ impl GraphStorage for InMemStorage {
     }
 
     fn get_random_node(&self) -> Option<Node> {
-        if self.nodes.is_empty() {
-            None
-        } else {
-            let mut rng = rand::thread_rng();
-            let index = rng.gen_range(0..self.nodes.len());
-            self.nodes.get(index).cloned()
-        }
+        // if self.nodes.is_empty() {
+        //     None
+        // } else {
+        //     let mut rng = rand::thread_rng();
+        //     let index = rng.gen_range(0..self.nodes.len());
+        //     self.nodes.get(index).cloned()
+        // }
+        return self.nodes.get(0).cloned();
     }
 
     fn get_all_node_indexes(&self) -> Vec<u32> {
         (0..self.nodes.len() as u32).collect()
     }
 
-    fn get_all_nodes(&self) -> Vec<Node> {
-        self.nodes.clone()
+    fn get_all_nodes(&self) -> HashMap<u32, Node> {
+        self.nodes
+            .iter()
+            .map(|node| (node.id, node.clone()))
+            .collect()
     }
 }

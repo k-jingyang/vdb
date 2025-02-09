@@ -1,18 +1,19 @@
+use crate::Node;
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
+    time::Duration,
 };
-
-use crate::Node;
+use tokio::runtime;
 
 use super::GraphStorage;
 
 // FreshDisk is the storage implementation of the system described in the FreshDiskANN paper
-// Note: current impl is buggy because of race conditions
+// Note: current impl is buggy because of data races
 pub struct FreshDisk {
-    long_term_index: RwLock<crate::NaiveDisk>,
+    long_term_index: Arc<RwLock<crate::NaiveDisk>>,
     delete_list: Vec<u32>, // delete not implemented yet
-    ro_temp_index: RwLock<HashMap<u32, Node>>,
+    ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
     rw_temp_index: RwLock<HashMap<u32, Node>>,
     next_node_index: u32,
 }
@@ -24,26 +25,69 @@ impl FreshDisk {
         index_path: &str,
         free_path: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let long_term_index = Arc::new(RwLock::new(crate::NaiveDisk::new(
+            dimensions,
+            max_neighbor_count,
+            index_path,
+            free_path,
+        )?));
+
+        let ro_temp_index = Arc::new(RwLock::new(HashMap::new()));
+
         let fresh_disk = FreshDisk {
-            long_term_index: RwLock::new(crate::NaiveDisk::new(
-                dimensions,
-                max_neighbor_count,
-                index_path,
-                free_path,
-            )?),
+            long_term_index: long_term_index.clone(),
             delete_list: Vec::new(),
-            ro_temp_index: RwLock::new(HashMap::new()),
+            ro_temp_index: ro_temp_index.clone(),
             rw_temp_index: RwLock::new(HashMap::new()),
             next_node_index: 0,
         };
 
-        // TODO: start async thread to periodically flush ro_temp_index to long_term_index
+        // let rt = runtime::Builder::new_multi_thread()
+        //     .enable_all()
+        //     .thread_stack_size(8 * 1024 * 1024)
+        //     .worker_threads(10)
+        //     .max_blocking_threads(10)
+        //     .build()?;
+
+        // rt.spawn(Self::periodic_flush(
+        //     long_term_index.clone(),
+        //     ro_temp_index.clone(),
+        // ));
 
         Ok(fresh_disk)
     }
 
     fn check_and_convert_rw_index(&mut self) {
         // TODO: if rw_index reach max limit, flush rw_index to ro_index
+    }
+
+    async fn periodic_flush(
+        long_term_index: Arc<RwLock<crate::NaiveDisk>>,
+        ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
+    ) {
+        let flush_interval = Duration::from_secs(10); // Adjust the interval as needed
+
+        loop {
+            tokio::time::sleep(flush_interval).await;
+
+            println!("Flushing...");
+            // Lock the ro_temp_index for reading
+            let ro_temp = ro_temp_index.read();
+
+            // Lock the long_term_index for writing
+            let mut long_term = long_term_index.write();
+
+            // Flush the ro_temp_index to the long_term_index
+            for (_, node) in ro_temp.as_ref().unwrap().iter() {
+                long_term.as_mut().unwrap().set_node(node).unwrap();
+            }
+
+            // release locks
+            drop(long_term);
+            drop(ro_temp);
+
+            ro_temp_index.write().unwrap().clear();
+        }
     }
 }
 
@@ -82,7 +126,7 @@ impl GraphStorage for FreshDisk {
     fn set_connections(
         &mut self,
         node_index: u32,
-        connections: &std::collections::HashSet<u32>,
+        connections: &HashSet<u32>,
     ) -> std::io::Result<()> {
         let mut node = self.get_node(node_index)?;
         node.connected = connections.clone();
@@ -111,20 +155,18 @@ impl GraphStorage for FreshDisk {
             node_indexes.insert(*node_id);
         });
 
-        node_indexes.into_iter().collect()
+        let mut node_indexes: Vec<u32> = node_indexes.into_iter().collect();
+        node_indexes.sort_unstable();
+        node_indexes
     }
 
-    // unsorted
-    fn get_all_nodes(&self) -> Vec<Node> {
+    fn get_all_nodes(&self) -> HashMap<u32, Node> {
         let long_term_index = self.long_term_index.read().unwrap();
         let ro_index = self.ro_temp_index.read().unwrap();
         let rw_index = self.rw_temp_index.read().unwrap();
 
-        let mut all_nodes: HashMap<u32, Node> = long_term_index
-            .get_all_nodes()
-            .into_iter()
-            .map(|node| (node.id, node))
-            .collect();
+        // order of insertion must be long term index > ro index > rw index
+        let mut all_nodes: HashMap<u32, Node> = long_term_index.get_all_nodes();
 
         ro_index.iter().for_each(|(node_id, node)| {
             all_nodes.insert(*node_id, node.clone());
@@ -134,7 +176,7 @@ impl GraphStorage for FreshDisk {
             all_nodes.insert(*node_id, node.clone());
         });
 
-        all_nodes.into_iter().map(|(_, node)| node).collect()
+        all_nodes
     }
 }
 

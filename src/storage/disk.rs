@@ -1,6 +1,7 @@
 use rand::Rng;
 
 use crate::graph::Node;
+use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{self, Error, ErrorKind};
 use std::{
@@ -95,7 +96,7 @@ impl NaiveDisk {
             + (self.dimensions as usize * std::mem::size_of::<f32>()) as u64
     }
 
-    fn set_node(&mut self, node: &Node) -> io::Result<()> {
+    pub(crate) fn set_node(&mut self, node: &Node) -> io::Result<()> {
         let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
         f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
         f.seek(SeekFrom::Current(
@@ -246,10 +247,10 @@ impl GraphStorage for NaiveDisk {
         node_indexes
     }
 
-    fn get_all_nodes(&self) -> Vec<Node> {
-        let mut all_nodes = Vec::new();
+    fn get_all_nodes(&self) -> HashMap<u32, Node> {
+        let mut all_nodes: HashMap<u32, Node> = HashMap::new();
         for node_index in self.get_all_node_indexes() {
-            all_nodes.push(self.get_node(node_index).unwrap());
+            all_nodes.insert(node_index, self.get_node(node_index).unwrap());
         }
         all_nodes
     }

@@ -1,6 +1,6 @@
 #![warn(unused_extern_crates)]
 use polars::{export::num::ToPrimitive, prelude::*};
-
+use tokio::runtime;
 mod constant;
 
 // 1000 vectors of 1536 dimensions

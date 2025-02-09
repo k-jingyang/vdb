@@ -2,7 +2,9 @@ use std::fs;
 
 use chrono::Local;
 
-use crate::{constant::MAX_NEIGHBOUR_COUNT, graph::Node, storage::InMemStorage};
+use crate::{
+    constant::MAX_NEIGHBOUR_COUNT, constant::VECTOR_DIMENSION, graph::Node, storage::InMemStorage,
+};
 
 use super::{graph::Graph, plotter::Plotter, vector::generate_random_vectors};
 
@@ -16,9 +18,12 @@ pub fn debug(seed_dataset_size: usize, vector_value_range: std::ops::Range<f32>)
     //     "disk.free",
     // )
     // .unwrap();
+    let fresh_disk =
+        crate::storage::FreshDisk::new(2, MAX_NEIGHBOUR_COUNT, "disk.index", "disk.free").unwrap();
 
     let in_mem = InMemStorage::new();
-    let mut graph = Graph::new(&test_vectors, 2, MAX_NEIGHBOUR_COUNT, Box::new(in_mem)).unwrap();
+    let mut graph =
+        Graph::new(&test_vectors, 2, MAX_NEIGHBOUR_COUNT, Box::new(fresh_disk)).unwrap();
     let mut plotter = Plotter::new(vector_value_range.clone());
 
     let nodes = graph.storage.get_all_nodes();
