@@ -1,9 +1,6 @@
-use rand::seq::index;
 use rand::Rng;
 
-use crate::graph::Graph;
-use crate::{constant::VECTOR_DIMENSION, graph::Node};
-use core::error;
+use crate::graph::Node;
 use std::fs::OpenOptions;
 use std::io::{self, Error, ErrorKind};
 use std::{
@@ -51,7 +48,7 @@ impl NaiveDisk {
         max_neighbor_count: u8,
         index_path: &str,
         free_path: &str,
-    ) -> Result<NaiveDisk, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut index_file = BufWriter::new(File::create(index_path)?);
 
         // Write metadata to index file
@@ -75,10 +72,17 @@ impl NaiveDisk {
     }
 
     fn index_node_size(&self) -> usize {
-        // u32 for node indexes
+        self.index_node_id_size()
+            + (self.dimensions as usize * self.index_node_vector_element_size())
+            + (self.max_neighbour_count as usize * self.index_node_id_size())
+    }
+
+    fn index_node_id_size(&self) -> usize {
         std::mem::size_of::<u32>()
-            + (self.dimensions as usize * std::mem::size_of::<f32>())
-            + (self.max_neighbour_count as usize * std::mem::size_of::<u32>())
+    }
+
+    fn index_node_vector_element_size(&self) -> usize {
+        self.dimensions as usize * std::mem::size_of::<f32>()
     }
 
     fn node_offset(&self, node_index: u32) -> u64 {
@@ -118,6 +122,7 @@ impl GraphStorage for NaiveDisk {
         }
         Ok(())
     }
+
     fn add_nodes(&mut self, data: &[Vec<f32>]) -> io::Result<Vec<u32>> {
         let mut created_node_indices: Vec<u32> = Vec::new();
 
@@ -162,13 +167,14 @@ impl GraphStorage for NaiveDisk {
 
         let mut buffer = vec![0u8; self.index_node_size()];
         index_file.read_exact(&mut buffer)?;
-        let node_id = u32::from_be_bytes(buffer[0..4].try_into().unwrap());
+        let node_id = u32::from_be_bytes(buffer[0..self.index_node_id_size()].try_into().unwrap());
 
         // Read vector
         let mut vector: Vec<f32> = Vec::new();
         for i in 0..self.dimensions {
-            let vector_offset_start = 4 + i as usize * 4;
-            let vector_offset_end = vector_offset_start + 4; // f32 = 4 bytes
+            let vector_offset_start =
+                self.index_node_id_size() + (i as usize * self.index_node_vector_element_size());
+            let vector_offset_end = vector_offset_start + self.index_node_vector_element_size();
             let vector_val = f32::from_be_bytes(
                 buffer[vector_offset_start..vector_offset_end]
                     .try_into()
