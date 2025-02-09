@@ -2,7 +2,7 @@ use rand::{thread_rng, Rng};
 
 pub fn generate_random_vectors(
     size: usize,
-    value_range: std::ops::Range<f32>,
+    value_range: &std::ops::Range<f32>,
     dimension: usize,
 ) -> Vec<Vec<f32>> {
     let mut vectors: Vec<Vec<f32>> = Vec::new();

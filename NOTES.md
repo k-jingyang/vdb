@@ -8,12 +8,13 @@
 
 ## TODO
 
-- Try out io_uring experiments?
 - Implement insert/delete based on Fresh-DiskANN
-- Arbitrary vector dimension
+- Try out io_uring experiments?
+- io_uring should help with
 - Dig into <https://github.com/infrawhispers/anansi>
   - How is RocksDB used?
 - qdrant benchmarking
+- How would this be sharded/scaled across machines?
 
 ## Questions
 
@@ -26,3 +27,4 @@
 
 [x] Explore disk storage representation
 [x] Read Fresh-DiskANN, Filtered-DiskANN
+[x] Arbitrary vector dimension

@@ -2,29 +2,24 @@ use std::fs;
 
 use chrono::Local;
 
-use crate::{
-    constant::{MAX_NEIGHBOUR_COUNT, SEED_DATASET_SIZE, VECTOR_DIMENSION, VECTOR_VALUE_RANGE},
-    graph::Node,
-    storage::InMemStorage,
-};
+use crate::{constant::MAX_NEIGHBOUR_COUNT, graph::Node, storage::InMemStorage};
 
 use super::{graph::Graph, plotter::Plotter, vector::generate_random_vectors};
-use crate::storage::NaiveDisk;
 
-pub fn init() {
-    let test_vectors = generate_random_vectors(SEED_DATASET_SIZE as usize, VECTOR_VALUE_RANGE, 2);
+pub fn debug(seed_dataset_size: usize, vector_value_range: std::ops::Range<f32>) {
+    let test_vectors = generate_random_vectors(seed_dataset_size, &vector_value_range, 2);
 
-    let disk = NaiveDisk::new(
-        VECTOR_DIMENSION,
-        MAX_NEIGHBOUR_COUNT,
-        "disk.index",
-        "disk.free",
-    )
-    .unwrap();
+    // let disk = crate::storage::NaiveDisk::new(
+    //     VECTOR_DIMENSION,
+    //     MAX_NEIGHBOUR_COUNT,
+    //     "disk.index",
+    //     "disk.free",
+    // )
+    // .unwrap();
 
     let in_mem = InMemStorage::new();
-    let mut graph = Graph::new(&test_vectors, 2, MAX_NEIGHBOUR_COUNT, Box::new(disk)).unwrap();
-    let mut plotter = Plotter::new();
+    let mut graph = Graph::new(&test_vectors, 2, MAX_NEIGHBOUR_COUNT, Box::new(in_mem)).unwrap();
+    let mut plotter = Plotter::new(vector_value_range.clone());
 
     let nodes = graph.storage.get_all_nodes();
     plotter.set_connected_nodes(&nodes);
@@ -68,5 +63,13 @@ pub fn init() {
     plotter
         .plot(&format!("{}/graph-2.png", path), "second pass, α=1.2")
         .unwrap();
+
+    let inserted_node = graph.insert(vec![1000.0, 1000.0], 0, 1.2, 10).unwrap();
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes());
+    plotter.set_isolated_nodes(&vec![inserted_node]);
+    plotter
+        .plot(&format!("{}/graph-3.png", path), "inserted")
+        .unwrap();
+
     // disk::write_to_disk(&graph);
 }

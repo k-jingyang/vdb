@@ -1,6 +1,8 @@
 #![warn(unused_extern_crates)]
 use polars::{export::num::ToPrimitive, prelude::*};
 
+mod constant;
+
 // 1000 vectors of 1536 dimensions
 // in-mem indexing: 19ms
 // disk indexing: 22s
@@ -15,6 +17,10 @@ use polars::{export::num::ToPrimitive, prelude::*};
 // Disk graph::new took 194.129564367s
 // Disk graph::index took 1635.210504063s
 fn main() {
+    vdb::vamana::debug(100, 0.0..2000.0);
+}
+
+fn run_dataset_test() {
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
     // vdb::vamana::init();

@@ -1,5 +1,3 @@
-use std::u8::MAX;
-
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use vdb::graph;
 
@@ -9,7 +7,7 @@ fn bench_index(c: &mut Criterion) {
     const DIMENSION: u16 = 2;
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
-    let test_vectors = vdb::vector::generate_random_vectors(SIZE, VALUE_RANGE, DIMENSION as usize);
+    let test_vectors = vdb::vector::generate_random_vectors(SIZE, &VALUE_RANGE, DIMENSION as usize);
 
     // todo: how to initialise inmem_storage outside closure
     c.bench_function("[in-mem] create and index graph", |b| {
@@ -49,7 +47,7 @@ fn bench_query(c: &mut Criterion) {
     const DIMENSION: u16 = 2;
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
-    let test_vectors = vdb::vector::generate_random_vectors(SIZE, VALUE_RANGE, DIMENSION as usize);
+    let test_vectors = vdb::vector::generate_random_vectors(SIZE, &VALUE_RANGE, DIMENSION as usize);
     let mut in_mem_graph = graph::Graph::new(
         &test_vectors,
         2,

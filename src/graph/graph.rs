@@ -136,7 +136,7 @@ impl Graph {
         visited: &HashSet<u32>,
         distance_threshold: f32,
         degree_bound: usize,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<Node, Box<dyn std::error::Error>> {
         // add all nodes that was visited to try to reach p (excluding p) into working set
         let mut working_set = visited.clone();
         working_set.retain(|x| *x != p_index);
@@ -179,7 +179,11 @@ impl Graph {
 
         self.storage.set_connections(p_index, &p_node_connections)?;
 
-        Ok(())
+        Ok(Node {
+            id: p_node.id,
+            vector: p_node.vector,
+            connected: p_node_connections,
+        })
     }
 
     pub fn index(&mut self, distance_threshold: f32) -> Result<(), Box<dyn std::error::Error>> {
@@ -194,13 +198,12 @@ impl Graph {
             let query_node = self.storage.get_node(node_index)?;
             let (_, visited) = self.greedy_search(start_node_index, &query_node.vector, 3, 10);
 
-            self.robust_prune(
+            let query_node = self.robust_prune(
                 node_index,
                 &visited,
                 distance_threshold,
                 self.max_neighbour_count,
             )?;
-            let query_node = self.storage.get_node(node_index).unwrap();
 
             let connected_node_indices = query_node.connected.clone();
             for connected_node_index in connected_node_indices.iter() {
@@ -222,6 +225,45 @@ impl Graph {
         }
 
         Ok(())
+    }
+
+    pub fn insert(
+        &mut self,
+        insert_vector: Vec<f32>,
+        start_node_index: u32,
+        distance_threshold: f32,
+        search_list_size: usize,
+    ) -> Result<Node, Box<dyn std::error::Error>> {
+        let (_, visited) =
+            self.greedy_search(start_node_index, &insert_vector, 1, search_list_size);
+        let new_node_index = self.storage.add_nodes(&[insert_vector])?[0];
+
+        let new_node = self.robust_prune(
+            new_node_index,
+            &visited,
+            distance_threshold,
+            self.max_neighbour_count,
+        )?;
+
+        let connected_node_indices = new_node.connected.clone();
+        for connected_node_index in connected_node_indices.iter() {
+            let mut connected_node = self.storage.get_node(*connected_node_index).unwrap();
+            connected_node.connected.insert(new_node_index);
+
+            if connected_node.connected.len() > self.max_neighbour_count {
+                self.robust_prune(
+                    *connected_node_index,
+                    &connected_node.connected,
+                    distance_threshold,
+                    self.max_neighbour_count,
+                )?;
+            } else {
+                self.storage
+                    .set_connections(*connected_node_index, &connected_node.connected)?;
+            }
+        }
+
+        Ok(new_node)
     }
 }
 

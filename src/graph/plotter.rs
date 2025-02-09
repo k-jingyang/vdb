@@ -3,19 +3,20 @@ use plotters::prelude::{BitMapBackend, Circle, IntoDrawingArea};
 use plotters::series::LineSeries;
 use plotters::style::{ShapeStyle, BLUE, RED, WHITE};
 
-use crate::constant::PLOT_GRAPH_X_Y_RANGE;
 use crate::graph::graph::Node;
 
 pub(super) struct Plotter {
     all_nodes: Vec<Node>,
     color_nodes: Vec<Node>,
+    x_y_range: std::ops::Range<f32>,
 }
 
 impl Plotter {
-    pub(super) fn new() -> Self {
+    pub(super) fn new(x_y_range: std::ops::Range<f32>) -> Self {
         Plotter {
             all_nodes: vec![],
             color_nodes: vec![],
+            x_y_range: x_y_range,
         }
     }
 
@@ -41,7 +42,7 @@ impl Plotter {
             .margin(10)
             .x_label_area_size(40)
             .y_label_area_size(40)
-            .build_cartesian_2d(PLOT_GRAPH_X_Y_RANGE.0, PLOT_GRAPH_X_Y_RANGE.1)?; // Adjust the ranges as needed
+            .build_cartesian_2d(self.x_y_range.clone(), self.x_y_range.clone())?; // Adjust the ranges as needed
 
         chart.configure_mesh().draw()?;
 
