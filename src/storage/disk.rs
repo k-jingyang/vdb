@@ -94,6 +94,30 @@ impl NaiveDisk {
             + std::mem::size_of::<u32>() as u64
             + (self.dimensions as usize * std::mem::size_of::<f32>()) as u64
     }
+
+    fn set_node(&mut self, node: &Node) -> io::Result<()> {
+        let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
+        f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
+        f.seek(SeekFrom::Current(
+            (node.id as usize * self.index_node_size()) as i64,
+        ))?;
+
+        let mut index_file = BufWriter::new(f);
+
+        // write node id
+        index_file.write_all(&(node.id).to_be_bytes())?;
+        for value in &node.vector {
+            index_file.write_all(&value.to_be_bytes())?;
+        }
+
+        // Pad neighbor indices
+        let neighbor_indices: Vec<u32> = vec![u32::MAX; self.max_neighbour_count as usize];
+        for &id in &neighbor_indices {
+            index_file.write_all(&id.to_be_bytes())?;
+        }
+
+        Ok(())
+    }
 }
 
 impl GraphStorage for NaiveDisk {
