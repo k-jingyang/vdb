@@ -1,4 +1,6 @@
 #![warn(unused_extern_crates)]
+use std::time::Duration;
+
 use polars::{export::num::ToPrimitive, prelude::*};
 use tokio::runtime;
 mod constant;
@@ -18,6 +20,8 @@ mod constant;
 // Disk graph::index took 1635.210504063s
 fn main() {
     vdb::vamana::debug(100, 0.0..2000.0);
+    println!("Done debug");
+    std::thread::sleep(Duration::from_secs(100));
 }
 
 fn run_dataset_test() {

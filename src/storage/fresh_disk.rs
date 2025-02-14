@@ -2,6 +2,7 @@ use crate::Node;
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex, RwLock},
+    thread,
     time::Duration,
 };
 use tokio::runtime;
@@ -14,7 +15,7 @@ pub struct FreshDisk {
     long_term_index: Arc<RwLock<crate::NaiveDisk>>,
     delete_list: Vec<u32>, // delete not implemented yet
     ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
-    rw_temp_index: RwLock<HashMap<u32, Node>>,
+    rw_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
     next_node_index: u32,
 }
 
@@ -33,60 +34,76 @@ impl FreshDisk {
         )?));
 
         let ro_temp_index = Arc::new(RwLock::new(HashMap::new()));
+        let rw_temp_index = Arc::new(RwLock::new(HashMap::new()));
 
         let fresh_disk = FreshDisk {
             long_term_index: long_term_index.clone(),
             delete_list: Vec::new(),
             ro_temp_index: ro_temp_index.clone(),
-            rw_temp_index: RwLock::new(HashMap::new()),
+            rw_temp_index: rw_temp_index.clone(),
             next_node_index: 0,
         };
 
-        // let rt = runtime::Builder::new_multi_thread()
-        //     .enable_all()
-        //     .thread_stack_size(8 * 1024 * 1024)
-        //     .worker_threads(10)
-        //     .max_blocking_threads(10)
-        //     .build()?;
+        let ro_temp_index_flush = ro_temp_index.clone();
 
-        // rt.spawn(Self::periodic_flush(
-        //     long_term_index.clone(),
-        //     ro_temp_index.clone(),
-        // ));
-
+        // TODO: not sure why move even though we clone?
+        std::thread::spawn(move || {
+            Self::periodic_flush(long_term_index.clone(), ro_temp_index_flush);
+        });
+        std::thread::spawn(move || {
+            Self::check_and_convert_rw_index(rw_temp_index.clone(), ro_temp_index.clone());
+        });
         Ok(fresh_disk)
     }
 
-    fn check_and_convert_rw_index(&mut self) {
-        // TODO: if rw_index reach max limit, flush rw_index to ro_index
+    fn check_and_convert_rw_index(
+        rw_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
+        ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
+    ) {
+        loop {
+            std::thread::sleep(Duration::from_millis(10));
+            let rw_temp = rw_temp_index.read().unwrap();
+            if rw_temp.len() < 10 {
+                continue;
+            }
+            drop(rw_temp);
+
+            println!("Flushing rw_index to ro_index...");
+
+            // TODO: flush rw_index to ro_index. There should be a better way by making ro_temp a list
+            let mut ro_temp = ro_temp_index.write().unwrap();
+            let mut rw_tmp = rw_temp_index.write().unwrap();
+            for (_, node) in rw_tmp.iter() {
+                ro_temp.insert(node.id, node.clone());
+            }
+            rw_tmp.clear();
+        }
     }
 
-    async fn periodic_flush(
+    fn periodic_flush(
         long_term_index: Arc<RwLock<crate::NaiveDisk>>,
         ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
     ) {
-        let flush_interval = Duration::from_secs(10); // Adjust the interval as needed
-
         loop {
-            tokio::time::sleep(flush_interval).await;
+            std::thread::sleep(Duration::from_millis(10));
 
-            println!("Flushing...");
-            // Lock the ro_temp_index for reading
-            let ro_temp = ro_temp_index.read();
+            let mut ro_temp = ro_temp_index.write().unwrap();
+            let mut long_term = long_term_index.write().unwrap();
 
-            // Lock the long_term_index for writing
-            let mut long_term = long_term_index.write();
-
-            // Flush the ro_temp_index to the long_term_index
-            for (_, node) in ro_temp.as_ref().unwrap().iter() {
-                long_term.as_mut().unwrap().set_node(node).unwrap();
+            if ro_temp.len() == 0 {
+                println!("Nothing to flush");
+                continue;
             }
 
-            // release locks
-            drop(long_term);
-            drop(ro_temp);
+            println!("Flushing from ro_temp to long_term...");
 
-            ro_temp_index.write().unwrap().clear();
+            // Flush the ro_temp_index to the long_term_index
+            for (_, node) in ro_temp.iter() {
+                long_term.set_node(node).unwrap();
+            }
+            ro_temp.clear();
+
+            println!("Flushing done...");
         }
     }
 }

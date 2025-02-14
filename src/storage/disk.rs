@@ -97,6 +97,7 @@ impl NaiveDisk {
     }
 
     pub(crate) fn set_node(&mut self, node: &Node) -> io::Result<()> {
+        println!("Writing node: {}", node.id);
         let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
         f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
         f.seek(SeekFrom::Current(
@@ -107,15 +108,40 @@ impl NaiveDisk {
 
         // write node id
         index_file.write_all(&(node.id).to_be_bytes())?;
+
+        // write vector
         for value in &node.vector {
             index_file.write_all(&value.to_be_bytes())?;
         }
 
         // Pad neighbor indices
+        // TODO: Doesn't set the neighbor indices
         let neighbor_indices: Vec<u32> = vec![u32::MAX; self.max_neighbour_count as usize];
         for &id in &neighbor_indices {
             index_file.write_all(&id.to_be_bytes())?;
         }
+
+        // let mut index_file = BufWriter::new(f);
+
+        // // write nodes to index file
+        // for datum in data {
+        //     let node_index = self.next_node_index;
+
+        //     // write node id
+        //     index_file.write_all(&(node_index).to_be_bytes())?;
+        //     for &value in datum {
+        //         index_file.write_all(&value.to_be_bytes())?;
+        //     }
+
+        //     // Pad neighbor indices
+        //     let neighbor_indices: Vec<u32> = vec![u32::MAX; self.max_neighbour_count as usize];
+        //     for &id in &neighbor_indices {
+        //         index_file.write_all(&id.to_be_bytes())?;
+        //     }
+
+        //     created_node_indices.push(node_index);
+        //     self.next_node_index += 1
+        // }
 
         Ok(())
     }
@@ -183,6 +209,7 @@ impl GraphStorage for NaiveDisk {
     }
 
     fn get_node(&self, node_index: u32) -> io::Result<Node> {
+        println!("Reading node: {}", node_index);
         let mut index_file = File::open(&self.index_path)?;
 
         index_file.seek(SeekFrom::Current(
@@ -299,5 +326,36 @@ mod tests {
         assert_eq!(1, retrieved_node2.id);
         assert_eq!(vec![3.0, 4.0], retrieved_node2.vector);
         assert_eq!(HashSet::from([0]), retrieved_node2.connected);
+    }
+
+    #[test]
+    fn test_set_node_and_get_node() {
+        let temp_dir = env::temp_dir();
+        let index_path = temp_dir.as_path().join("test_set.index");
+        let free_path = temp_dir.as_path().join("test_set.free");
+
+        // Create a DiskStorage instance
+        let mut disk_storage = NaiveDisk::new(
+            2,
+            3,
+            index_path.to_str().unwrap(),
+            free_path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        // Add a node to the storage
+        let node = Node {
+            id: 0,
+            vector: vec![5.0, 6.0],
+            connected: HashSet::new(),
+        };
+        disk_storage.set_node(&node).unwrap();
+
+        // Retrieve the node and verify
+        let retrieved_node = disk_storage.get_node(0).unwrap();
+
+        assert_eq!(0, retrieved_node.id);
+        assert_eq!(vec![5.0, 6.0], retrieved_node.vector);
+        assert!(retrieved_node.connected.is_empty());
     }
 }
