@@ -1,6 +1,7 @@
 #![warn(unused_extern_crates)]
 use std::time::Duration;
 
+use constant::{MAX_NEIGHBOUR_COUNT, VECTOR_DIMENSION};
 use polars::{export::num::ToPrimitive, prelude::*};
 use tokio::runtime;
 mod constant;
@@ -19,7 +20,18 @@ mod constant;
 // Disk graph::new took 194.129564367s
 // Disk graph::index took 1635.210504063s
 fn main() {
-    vdb::vamana::debug(100, 0.0..2000.0);
+    let disk = vdb::storage::NaiveDisk::new(
+        VECTOR_DIMENSION,
+        MAX_NEIGHBOUR_COUNT,
+        "disk.index",
+        "disk.free",
+    )
+    .unwrap();
+    let fresh_disk =
+        vdb::storage::FreshDisk::new(2, MAX_NEIGHBOUR_COUNT, "disk.index", "disk.free").unwrap();
+    let in_mem = vdb::storage::InMemStorage::new();
+
+    vdb::vamana::debug(100, 0.0..2000.0, Box::new(fresh_disk));
     println!("Done debug");
     std::thread::sleep(Duration::from_secs(100));
 }
