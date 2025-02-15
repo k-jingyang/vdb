@@ -114,35 +114,16 @@ impl NaiveDisk {
             index_file.write_all(&value.to_be_bytes())?;
         }
 
-        // Pad neighbor indices
-        // TODO: Doesn't set the neighbor indices
-        let neighbor_indices: Vec<u32> = vec![u32::MAX; self.max_neighbour_count as usize];
-        for &id in &neighbor_indices {
-            index_file.write_all(&id.to_be_bytes())?;
+        // Set neighbors
+        for neighbor in &node.connected {
+            index_file.write_all(&neighbor.to_be_bytes())?;
         }
 
-        // let mut index_file = BufWriter::new(f);
-
-        // // write nodes to index file
-        // for datum in data {
-        //     let node_index = self.next_node_index;
-
-        //     // write node id
-        //     index_file.write_all(&(node_index).to_be_bytes())?;
-        //     for &value in datum {
-        //         index_file.write_all(&value.to_be_bytes())?;
-        //     }
-
-        //     // Pad neighbor indices
-        //     let neighbor_indices: Vec<u32> = vec![u32::MAX; self.max_neighbour_count as usize];
-        //     for &id in &neighbor_indices {
-        //         index_file.write_all(&id.to_be_bytes())?;
-        //     }
-
-        //     created_node_indices.push(node_index);
-        //     self.next_node_index += 1
-        // }
-
+        // Pad neighbor indices
+        let padding = self.max_neighbour_count as usize - node.connected.len();
+        for _ in 0..padding {
+            index_file.write_all(&u32::MAX.to_be_bytes())?;
+        }
         Ok(())
     }
 }
@@ -209,7 +190,6 @@ impl GraphStorage for NaiveDisk {
     }
 
     fn get_node(&self, node_index: u32) -> io::Result<Node> {
-        println!("Reading node: {}", node_index);
         let mut index_file = File::open(&self.index_path)?;
 
         index_file.seek(SeekFrom::Current(
@@ -345,16 +325,16 @@ mod tests {
 
         // Add a node to the storage
         let node = Node {
-            id: 0,
+            id: 5,
             vector: vec![5.0, 6.0],
             connected: HashSet::new(),
         };
         disk_storage.set_node(&node).unwrap();
 
         // Retrieve the node and verify
-        let retrieved_node = disk_storage.get_node(0).unwrap();
+        let retrieved_node = disk_storage.get_node(5).unwrap();
 
-        assert_eq!(0, retrieved_node.id);
+        assert_eq!(5, retrieved_node.id);
         assert_eq!(vec![5.0, 6.0], retrieved_node.vector);
         assert!(retrieved_node.connected.is_empty());
     }

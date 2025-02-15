@@ -91,7 +91,7 @@ impl FreshDisk {
             let mut long_term = long_term_index.write().unwrap();
 
             if ro_temp.len() == 0 {
-                println!("Nothing to flush");
+                // println!("Nothing to flush");
                 continue;
             }
 
@@ -184,6 +184,7 @@ impl GraphStorage for FreshDisk {
 
         // order of insertion must be long term index > ro index > rw index
         let mut all_nodes: HashMap<u32, Node> = long_term_index.get_all_nodes();
+        println!("all_nodes from lti: {:?}", all_nodes);
 
         ro_index.iter().for_each(|(node_id, node)| {
             all_nodes.insert(*node_id, node.clone());
