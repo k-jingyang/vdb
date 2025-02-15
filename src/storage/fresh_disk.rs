@@ -1,6 +1,7 @@
 use crate::Node;
 use std::{
     collections::{HashMap, HashSet},
+    io::{Error, ErrorKind},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -39,7 +40,7 @@ impl FreshDisk {
             delete_list: Vec::new(),
             ro_temp_index: ro_temp_index.clone(),
             rw_temp_index: rw_temp_index.clone(),
-            next_node_index: 0,
+            next_node_index: 1, // node_id=0 is reserved to indicate that node doesn't exist
         };
 
         let ro_temp_index_flush = ro_temp_index.clone();
@@ -124,6 +125,10 @@ impl GraphStorage for FreshDisk {
     }
 
     fn get_node(&self, node_id: u32) -> std::io::Result<Node> {
+        if node_id == 0 {
+            return Err(Error::new(ErrorKind::Other, "node_id=0 is reserved"));
+        }
+
         let from_rw_index = self.rw_temp_index.read().unwrap().get(&node_id).cloned();
         if let Some(node) = from_rw_index {
             return Ok(node);
@@ -143,6 +148,10 @@ impl GraphStorage for FreshDisk {
         node_index: u32,
         connections: &HashSet<u32>,
     ) -> std::io::Result<()> {
+        if node_index == 0 {
+            return Err(Error::new(ErrorKind::Other, "node_id=0 is reserved"));
+        }
+
         let mut node = self.get_node(node_index)?;
         node.connected = connections.clone();
         self.rw_temp_index.write().unwrap().insert(node_index, node);
@@ -223,24 +232,24 @@ mod tests {
             .add_nodes(&[vec![1.0, 2.0], vec![3.0, 4.0]])
             .unwrap();
 
-        assert_eq!(ids, vec![0, 1]);
+        assert_eq!(ids, vec![1, 2]);
         fresh_disk
-            .set_connections(0, &HashSet::from([1u32]))
+            .set_connections(1, &HashSet::from([2u32]))
             .unwrap();
         fresh_disk
-            .set_connections(1, &HashSet::from([0u32]))
+            .set_connections(2, &HashSet::from([1u32]))
             .unwrap();
 
         // Retrieve nodes and verify
-        let retrieved_node1 = fresh_disk.get_node(0).unwrap();
-        let retrieved_node2 = fresh_disk.get_node(1).unwrap();
+        let retrieved_node1 = fresh_disk.get_node(1).unwrap();
+        let retrieved_node2 = fresh_disk.get_node(2).unwrap();
 
-        assert_eq!(0, retrieved_node1.id);
+        assert_eq!(1, retrieved_node1.id);
         assert_eq!(vec![1.0, 2.0], retrieved_node1.vector);
-        assert_eq!(HashSet::from([1]), retrieved_node1.connected);
+        assert_eq!(HashSet::from([2]), retrieved_node1.connected);
 
-        assert_eq!(1, retrieved_node2.id);
+        assert_eq!(2, retrieved_node2.id);
         assert_eq!(vec![3.0, 4.0], retrieved_node2.vector);
-        assert_eq!(HashSet::from([0]), retrieved_node2.connected);
+        assert_eq!(HashSet::from([1]), retrieved_node2.connected);
     }
 }

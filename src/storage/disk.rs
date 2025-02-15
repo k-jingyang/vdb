@@ -60,7 +60,7 @@ impl NaiveDisk {
         Ok(NaiveDisk {
             dimensions: dimensions,
             max_neighbour_count: max_neighbor_count,
-            next_node_index: 0,
+            next_node_index: 1,
             index_path: index_path.to_string(),
             free_path: free_path.to_string(),
         })
@@ -97,7 +97,9 @@ impl NaiveDisk {
     }
 
     pub(crate) fn set_node(&mut self, node: &Node) -> io::Result<()> {
-        println!("Writing node: {}", node.id);
+        if node.id == 0 {
+            return Err(Error::new(ErrorKind::Other, "node id cannot be 0"));
+        }
         let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
         f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
         f.seek(SeekFrom::Current(
@@ -122,7 +124,7 @@ impl NaiveDisk {
         // Pad neighbor indices
         let padding = self.max_neighbour_count as usize - node.connected.len();
         for _ in 0..padding {
-            index_file.write_all(&u32::MAX.to_be_bytes())?;
+            index_file.write_all(&0_u32.to_be_bytes())?;
         }
         Ok(())
     }
@@ -150,7 +152,7 @@ impl GraphStorage for NaiveDisk {
         // Pad neighbor indices
         let padding = self.max_neighbour_count as usize - connections.len();
         for _ in 0..padding {
-            index_file.write_all(&u32::MAX.to_be_bytes())?;
+            index_file.write_all(&0_u32.to_be_bytes())?;
         }
         Ok(())
     }
@@ -227,7 +229,7 @@ impl GraphStorage for NaiveDisk {
             );
 
             // Ignore padding
-            if neighbor_index != u32::MAX {
+            if neighbor_index != 0 {
                 connected.insert(neighbor_index);
             }
         }
@@ -287,25 +289,25 @@ mod tests {
             .add_nodes(&[vec![1.0, 2.0], vec![3.0, 4.0]])
             .unwrap();
 
-        assert_eq!(ids, vec![0, 1]);
+        assert_eq!(ids, vec![1, 2]);
         disk_storage
-            .set_connections(0, &HashSet::from([1u32]))
+            .set_connections(1, &HashSet::from([2u32]))
             .unwrap();
         disk_storage
-            .set_connections(1, &HashSet::from([0u32]))
+            .set_connections(2, &HashSet::from([1u32]))
             .unwrap();
 
         // Retrieve nodes and verify
-        let retrieved_node1 = disk_storage.get_node(0).unwrap();
-        let retrieved_node2 = disk_storage.get_node(1).unwrap();
+        let retrieved_node1 = disk_storage.get_node(1).unwrap();
+        let retrieved_node2 = disk_storage.get_node(2).unwrap();
 
-        assert_eq!(0, retrieved_node1.id);
+        assert_eq!(1, retrieved_node1.id);
         assert_eq!(vec![1.0, 2.0], retrieved_node1.vector);
-        assert_eq!(HashSet::from([1]), retrieved_node1.connected);
+        assert_eq!(HashSet::from([2]), retrieved_node1.connected);
 
-        assert_eq!(1, retrieved_node2.id);
+        assert_eq!(2, retrieved_node2.id);
         assert_eq!(vec![3.0, 4.0], retrieved_node2.vector);
-        assert_eq!(HashSet::from([0]), retrieved_node2.connected);
+        assert_eq!(HashSet::from([1]), retrieved_node2.connected);
     }
 
     #[test]
