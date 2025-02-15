@@ -83,7 +83,7 @@ impl NaiveDisk {
     }
 
     fn index_node_vector_element_size(&self) -> usize {
-        self.dimensions as usize * std::mem::size_of::<f32>()
+        std::mem::size_of::<f32>()
     }
 
     fn node_offset(&self, node_index: u32) -> u64 {
