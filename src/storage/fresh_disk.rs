@@ -1,11 +1,9 @@
 use crate::Node;
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex, RwLock},
-    thread,
+    sync::{Arc, RwLock},
     time::Duration,
 };
-use tokio::runtime;
 
 use super::GraphStorage;
 
@@ -161,6 +159,8 @@ impl GraphStorage for FreshDisk {
         let ro_index = self.ro_temp_index.read().unwrap();
         let rw_index = self.rw_temp_index.read().unwrap();
 
+        // TODO: disk's get_all_node_indexes implementation doesn't work when used with fresh_disk
+        // because fresh_disk increment the index maintained in disk
         let mut node_indexes: HashSet<u32> =
             long_term_index.get_all_node_indexes().into_iter().collect();
 
