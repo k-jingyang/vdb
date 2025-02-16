@@ -9,10 +9,11 @@ plotters = "0.3.7"
 polars = { version = "0.26.1", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime"] }
 rand = "0.8.5"
 simsimd = "6.3.0"
-tokio = { version = "1.43.0", features = ["full"] }
+thiserror = "1"
 
 [dev-dependencies]
 criterion = { version = "0.4", features = ["html_reports"] }
+anyhow = "1"
 
 [[bench]]
 name = "my_benchmark"

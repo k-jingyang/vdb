@@ -18,7 +18,7 @@ pub fn debug(
     let mut plotter = Plotter::new(vector_value_range.clone());
 
     // plot initial
-    let nodes = graph.storage.get_all_nodes();
+    let nodes = graph.storage.get_all_nodes().unwrap();
     plotter.set_connected_nodes(&nodes);
 
     let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
@@ -43,7 +43,7 @@ pub fn debug(
         .filter_map(|&id| graph.storage.get_node(id).ok())
         .collect();
     plotter.set_isolated_nodes(&closest_nodes);
-    plotter.set_connected_nodes(&graph.storage.get_all_nodes());
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
     plotter
         .plot(&format!("{}/graph-1.png", path), "first pass, α=1")
         .unwrap();
@@ -56,14 +56,14 @@ pub fn debug(
         .filter_map(|&id| graph.storage.get_node(id).ok())
         .collect();
     plotter.set_isolated_nodes(&closest_nodes);
-    plotter.set_connected_nodes(&graph.storage.get_all_nodes());
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
     plotter
         .plot(&format!("{}/graph-2.png", path), "second pass, α=1.2")
         .unwrap();
 
     // insert new node
     let inserted_node = graph.insert(vec![1000.0, 1000.0], 1, 1.2, 10).unwrap();
-    plotter.set_connected_nodes(&graph.storage.get_all_nodes());
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
     plotter.set_isolated_nodes(&vec![inserted_node]);
     plotter
         .plot(&format!("{}/graph-3.png", path), "inserted")

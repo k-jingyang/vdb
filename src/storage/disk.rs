@@ -1,6 +1,8 @@
 use rand::Rng;
 
+use crate::error;
 use crate::graph::Node;
+use crate::prelude::Result;
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{self, Error, ErrorKind};
@@ -49,7 +51,7 @@ impl NaiveDisk {
         max_neighbor_count: u8,
         index_path: &str,
         free_path: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self> {
         let mut index_file = BufWriter::new(File::create(index_path)?);
 
         // Write metadata to index file
@@ -129,9 +131,11 @@ impl NaiveDisk {
 }
 
 impl GraphStorage for NaiveDisk {
-    fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> io::Result<()> {
+    fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> Result<()> {
         if connections.len() > self.max_neighbour_count as usize {
-            return Err(Error::new(ErrorKind::Other, "max connections reached"));
+            return Err(error::Error::InvalidInput(
+                "max connections reached".to_owned(),
+            ));
         }
 
         let mut open_index_file = OpenOptions::new()
@@ -155,7 +159,7 @@ impl GraphStorage for NaiveDisk {
         Ok(())
     }
 
-    fn add_nodes(&mut self, data: &[Vec<f32>]) -> io::Result<Vec<u32>> {
+    fn add_nodes(&mut self, data: &[Vec<f32>]) -> Result<Vec<u32>> {
         let mut created_node_indices: Vec<u32> = Vec::new();
 
         // jump to next node offset
@@ -188,9 +192,9 @@ impl GraphStorage for NaiveDisk {
         Ok(created_node_indices)
     }
 
-    fn get_node(&self, node_index: u32) -> io::Result<Node> {
+    fn get_node(&self, node_index: u32) -> Result<Node> {
         if node_index == 0 {
-            return Err(Error::new(ErrorKind::Other, "node id cannot be 0"));
+            return Err(error::Error::InvalidInput("node id cannot be 0".to_owned()));
         }
 
         let mut index_file = File::open(&self.index_path)?;
@@ -245,18 +249,16 @@ impl GraphStorage for NaiveDisk {
     }
 
     // scan the index file and return all node indexes
-    fn get_all_node_indexes(&self) -> Vec<u32> {
+    fn get_all_node_indexes(&self) -> Result<Vec<u32>> {
         let mut node_indexes = Vec::new();
 
         // TODO: need to exclude free list nodes
-        let mut index_file = File::open(&self.index_path).unwrap();
-        index_file
-            .seek(SeekFrom::Current((self.index_metadata_size()) as i64))
-            .unwrap();
+        let mut index_file = File::open(&self.index_path)?;
+        index_file.seek(SeekFrom::Current((self.index_metadata_size()) as i64))?;
 
         let mut buffer = vec![0u8; self.index_node_id_size()];
         loop {
-            let bytes_read = index_file.read(&mut buffer).unwrap();
+            let bytes_read = index_file.read(&mut buffer)?;
             // EOF
             if bytes_read == 0 {
                 break;
@@ -278,15 +280,15 @@ impl GraphStorage for NaiveDisk {
                 .unwrap();
         }
 
-        node_indexes
+        Ok(node_indexes)
     }
 
-    fn get_all_nodes(&self) -> HashMap<u32, Node> {
+    fn get_all_nodes(&self) -> Result<HashMap<u32, Node>> {
         let mut all_nodes: HashMap<u32, Node> = HashMap::new();
-        for node_index in self.get_all_node_indexes() {
-            all_nodes.insert(node_index, self.get_node(node_index).unwrap());
+        for node_index in self.get_all_node_indexes()? {
+            all_nodes.insert(node_index, self.get_node(node_index)?);
         }
-        all_nodes
+        Ok(all_nodes)
     }
 }
 #[cfg(test)]
@@ -387,7 +389,7 @@ mod tests {
             .unwrap();
 
         // Retrieve all node indexes and verify
-        let node_indexes = disk_storage.get_all_node_indexes();
+        let node_indexes = disk_storage.get_all_node_indexes().unwrap();
         assert_eq!(node_indexes.len(), 2);
         assert!(node_indexes.contains(&1));
         assert!(node_indexes.contains(&2));

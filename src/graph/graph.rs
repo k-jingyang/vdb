@@ -1,7 +1,7 @@
+use crate::prelude::*;
 use crate::storage::GraphStorage;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use simsimd::SpatialSimilarity;
-
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashSet},
@@ -18,7 +18,7 @@ impl Graph {
         r: usize,
         max_neighbour_count: u8,
         mut store: Box<dyn GraphStorage>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self> {
         let new_nodes_indices = store.add_nodes(input)?;
         let mut new_nodes: Vec<Node> = Vec::new();
 
@@ -70,7 +70,7 @@ impl Graph {
         search_list_size: usize,
     ) -> (Vec<u32>, HashSet<u32>) {
         let all_node_indexes = self.storage.get_all_node_indexes();
-        let random_index = *all_node_indexes.choose(&mut thread_rng()).unwrap();
+        let random_index = *all_node_indexes.unwrap().choose(&mut thread_rng()).unwrap();
         self.greedy_search(random_index, query_node, k, search_list_size)
     }
 
@@ -136,7 +136,7 @@ impl Graph {
         visited: &HashSet<u32>,
         distance_threshold: f32,
         degree_bound: usize,
-    ) -> Result<Node, Box<dyn std::error::Error>> {
+    ) -> Result<Node> {
         // add all nodes that was visited to try to reach p (excluding p) into working set
         let mut working_set = visited.clone();
         working_set.retain(|x| *x != p_index);
@@ -186,11 +186,11 @@ impl Graph {
         })
     }
 
-    pub fn index(&mut self, distance_threshold: f32) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn index(&mut self, distance_threshold: f32) -> Result<()> {
         let start_node = self.storage.get_random_node().unwrap();
         let start_node_index = start_node.id;
 
-        let mut node_indices: Vec<u32> = self.storage.get_all_node_indexes();
+        let mut node_indices: Vec<u32> = self.storage.get_all_node_indexes()?;
         let mut rng = thread_rng();
         node_indices.shuffle(&mut rng);
 
@@ -233,7 +233,7 @@ impl Graph {
         start_node_index: u32,
         distance_threshold: f32,
         search_list_size: usize,
-    ) -> Result<Node, Box<dyn std::error::Error>> {
+    ) -> Result<Node> {
         let (_, visited) =
             self.greedy_search(start_node_index, &insert_vector, 1, search_list_size);
         let new_node_index = self.storage.add_nodes(&[insert_vector])?[0];

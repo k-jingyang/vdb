@@ -1,7 +1,6 @@
-use crate::Node;
+use crate::{prelude::Error, prelude::*, Node};
 use std::{
     collections::{HashMap, HashSet},
-    io::{Error, ErrorKind},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -24,7 +23,7 @@ impl FreshDisk {
         max_neighbor_count: u8,
         index_path: &str,
         free_path: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self> {
         let long_term_index = Arc::new(RwLock::new(crate::NaiveDisk::new(
             dimensions,
             max_neighbor_count,
@@ -108,7 +107,7 @@ impl FreshDisk {
 }
 
 impl GraphStorage for FreshDisk {
-    fn add_nodes(&mut self, data: &[Vec<f32>]) -> std::io::Result<Vec<u32>> {
+    fn add_nodes(&mut self, data: &[Vec<f32>]) -> Result<Vec<u32>> {
         let mut created_node_indices = Vec::new();
 
         for datum in data {
@@ -124,9 +123,9 @@ impl GraphStorage for FreshDisk {
         Ok(created_node_indices)
     }
 
-    fn get_node(&self, node_id: u32) -> std::io::Result<Node> {
+    fn get_node(&self, node_id: u32) -> Result<Node> {
         if node_id == 0 {
-            return Err(Error::new(ErrorKind::Other, "node_id=0 is reserved"));
+            return Err(Error::InvalidInput("node_id=0 is reserved".to_owned()));
         }
 
         let from_rw_index = self.rw_temp_index.read().unwrap().get(&node_id).cloned();
@@ -143,13 +142,9 @@ impl GraphStorage for FreshDisk {
         Ok(node)
     }
 
-    fn set_connections(
-        &mut self,
-        node_index: u32,
-        connections: &HashSet<u32>,
-    ) -> std::io::Result<()> {
+    fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> Result<()> {
         if node_index == 0 {
-            return Err(Error::new(ErrorKind::Other, "node_id=0 is reserved"));
+            return Err(Error::InvalidInput("node_id=0 is reserved".to_owned()));
         }
 
         let mut node = self.get_node(node_index)?;
@@ -163,13 +158,15 @@ impl GraphStorage for FreshDisk {
     }
 
     // unsorted
-    fn get_all_node_indexes(&self) -> Vec<u32> {
+    fn get_all_node_indexes(&self) -> Result<Vec<u32>> {
         let long_term_index = self.long_term_index.read().unwrap();
         let ro_index = self.ro_temp_index.read().unwrap();
         let rw_index = self.rw_temp_index.read().unwrap();
 
-        let mut node_indexes: HashSet<u32> =
-            long_term_index.get_all_node_indexes().into_iter().collect();
+        let mut node_indexes: HashSet<u32> = long_term_index
+            .get_all_node_indexes()?
+            .into_iter()
+            .collect();
 
         ro_index.keys().for_each(|node_id| {
             node_indexes.insert(*node_id);
@@ -181,16 +178,16 @@ impl GraphStorage for FreshDisk {
 
         let mut node_indexes: Vec<u32> = node_indexes.into_iter().collect();
         node_indexes.sort_unstable();
-        node_indexes
+        Ok(node_indexes)
     }
 
-    fn get_all_nodes(&self) -> HashMap<u32, Node> {
+    fn get_all_nodes(&self) -> Result<HashMap<u32, Node>> {
         let long_term_index = self.long_term_index.read().unwrap();
         let ro_index = self.ro_temp_index.read().unwrap();
         let rw_index = self.rw_temp_index.read().unwrap();
 
         // order of insertion must be long term index > ro index > rw index
-        let mut all_nodes: HashMap<u32, Node> = long_term_index.get_all_nodes();
+        let mut all_nodes: HashMap<u32, Node> = long_term_index.get_all_nodes()?;
         println!("all_nodes from lti: {:?}", all_nodes);
 
         ro_index.iter().for_each(|(node_id, node)| {
@@ -201,7 +198,7 @@ impl GraphStorage for FreshDisk {
             all_nodes.insert(*node_id, node.clone());
         });
 
-        all_nodes
+        Ok(all_nodes)
     }
 }
 

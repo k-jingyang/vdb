@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use constant::{MAX_NEIGHBOUR_COUNT, VECTOR_DIMENSION};
 use polars::{export::num::ToPrimitive, prelude::*};
-use tokio::runtime;
 mod constant;
 
 // 1000 vectors of 1536 dimensions

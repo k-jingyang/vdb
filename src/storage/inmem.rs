@@ -6,6 +6,7 @@ use std::{
 use rand::Rng;
 
 use crate::graph::Node;
+use crate::{prelude::*, Error};
 
 use super::GraphStorage;
 
@@ -20,7 +21,7 @@ impl InMemStorage {
 }
 
 impl GraphStorage for InMemStorage {
-    fn add_nodes(&mut self, data: &[Vec<f32>]) -> io::Result<Vec<u32>> {
+    fn add_nodes(&mut self, data: &[Vec<f32>]) -> Result<Vec<u32>> {
         let mut node_ids = Vec::new();
         for vector in data {
             let node_id = self.nodes.len() as u32;
@@ -34,21 +35,21 @@ impl GraphStorage for InMemStorage {
         Ok(node_ids)
     }
 
-    fn get_node(&self, node_id: u32) -> io::Result<Node> {
+    fn get_node(&self, node_id: u32) -> Result<Node> {
         self.nodes
             .get(node_id as usize)
             .cloned()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Node not found"))
+            .ok_or_else(|| Error::InvalidInput("Node not found".to_owned()))
     }
 
-    fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> io::Result<()> {
+    fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> Result<()> {
         if let Some(node) = self.nodes.get_mut(node_index as usize) {
             println!("before: {:?}, connections: {:?}", node, connections);
             node.connected = connections.clone();
             println!("after: {:?}", node);
             Ok(())
         } else {
-            Err(io::Error::new(io::ErrorKind::NotFound, "Node not found"))
+            Err(Error::InvalidInput("Node not found".to_owned()))
         }
     }
 
@@ -56,14 +57,15 @@ impl GraphStorage for InMemStorage {
         return self.nodes.get(0).cloned();
     }
 
-    fn get_all_node_indexes(&self) -> Vec<u32> {
-        (0..self.nodes.len() as u32).collect()
+    fn get_all_node_indexes(&self) -> Result<Vec<u32>> {
+        Ok((0..self.nodes.len() as u32).collect())
     }
 
-    fn get_all_nodes(&self) -> HashMap<u32, Node> {
-        self.nodes
+    fn get_all_nodes(&self) -> Result<HashMap<u32, Node>> {
+        Ok(self
+            .nodes
             .iter()
             .map(|node| (node.id, node.clone()))
-            .collect()
+            .collect())
     }
 }
