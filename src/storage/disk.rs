@@ -87,13 +87,15 @@ impl NaiveDisk {
     }
 
     fn node_offset(&self, node_index: u32) -> u64 {
-        self.index_metadata_size() as u64 + (node_index as usize * self.index_node_size()) as u64
+        // node_index - 1 because node_index starts from 1
+        self.index_metadata_size() as u64
+            + ((node_index - 1) as usize * self.index_node_size()) as u64
     }
 
     fn node_connections_offset(&self, node_index: u32) -> u64 {
         self.node_offset(node_index)
-            + std::mem::size_of::<u32>() as u64
-            + (self.dimensions as usize * std::mem::size_of::<f32>()) as u64
+            + self.index_node_id_size() as u64
+            + (self.dimensions as usize * self.index_node_vector_element_size()) as u64
     }
 
     pub(crate) fn set_node(&mut self, node: &Node) -> io::Result<()> {
@@ -101,11 +103,7 @@ impl NaiveDisk {
             return Err(Error::new(ErrorKind::Other, "node id cannot be 0"));
         }
         let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
-        f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
-        f.seek(SeekFrom::Current(
-            (node.id as usize * self.index_node_size()) as i64,
-        ))?;
-
+        f.seek(SeekFrom::Current(self.node_offset(node.id) as i64))?;
         let mut index_file = BufWriter::new(f);
 
         // write node id
@@ -162,9 +160,8 @@ impl GraphStorage for NaiveDisk {
 
         // jump to next node offset
         let mut f = OpenOptions::new().write(true).open(&self.index_path)?;
-        f.seek(SeekFrom::Current(self.index_metadata_size() as i64))?;
         f.seek(SeekFrom::Current(
-            (self.next_node_index as usize * self.index_node_size()) as i64,
+            self.node_offset(self.next_node_index) as i64
         ))?;
 
         let mut index_file = BufWriter::new(f);
@@ -192,12 +189,12 @@ impl GraphStorage for NaiveDisk {
     }
 
     fn get_node(&self, node_index: u32) -> io::Result<Node> {
-        let mut index_file = File::open(&self.index_path)?;
+        if node_index == 0 {
+            return Err(Error::new(ErrorKind::Other, "node id cannot be 0"));
+        }
 
-        index_file.seek(SeekFrom::Current(
-            self.index_metadata_size() as i64
-                + (node_index as usize * self.index_node_size()) as i64,
-        ))?;
+        let mut index_file = File::open(&self.index_path)?;
+        index_file.seek(SeekFrom::Current(self.node_offset(node_index) as i64))?;
 
         let mut buffer = vec![0u8; self.index_node_size()];
         index_file.read_exact(&mut buffer)?;
@@ -247,12 +244,40 @@ impl GraphStorage for NaiveDisk {
         self.get_node(node_index).ok()
     }
 
+    // scan the index file and return all node indexes
     fn get_all_node_indexes(&self) -> Vec<u32> {
-        // TODO: need to exclude free list nodes
         let mut node_indexes = Vec::new();
-        for i in 0..self.next_node_index {
-            node_indexes.push(i);
+
+        // TODO: need to exclude free list nodes
+        let mut index_file = File::open(&self.index_path).unwrap();
+        index_file
+            .seek(SeekFrom::Current((self.index_metadata_size()) as i64))
+            .unwrap();
+
+        let mut buffer = vec![0u8; self.index_node_id_size()];
+        loop {
+            let bytes_read = index_file.read(&mut buffer).unwrap();
+            // EOF
+            if bytes_read == 0 {
+                break;
+            }
+            let node_id =
+                u32::from_be_bytes(buffer[0..self.index_node_id_size()].try_into().unwrap());
+
+            // node_id = 0 is reserved for empty
+            if node_id == 0 {
+                continue;
+            }
+
+            node_indexes.push(node_id);
+
+            index_file
+                .seek(SeekFrom::Current(
+                    (self.index_node_size() - self.index_node_id_size()) as i64,
+                ))
+                .unwrap();
         }
+
         node_indexes
     }
 
@@ -339,5 +364,32 @@ mod tests {
         assert_eq!(5, retrieved_node.id);
         assert_eq!(vec![5.0, 6.0], retrieved_node.vector);
         assert!(retrieved_node.connected.is_empty());
+    }
+
+    #[test]
+    fn test_get_all_node_indexes() {
+        let temp_dir = env::temp_dir();
+        let index_path = temp_dir.as_path().join("test_get_all.index");
+        let free_path = temp_dir.as_path().join("test_get_all.free");
+
+        // Create a DiskStorage instance
+        let mut disk_storage = NaiveDisk::new(
+            2,
+            3,
+            index_path.to_str().unwrap(),
+            free_path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        // Add nodes to the storage
+        let _ = disk_storage
+            .add_nodes(&[vec![1.0, 2.0], vec![3.0, 4.0]])
+            .unwrap();
+
+        // Retrieve all node indexes and verify
+        let node_indexes = disk_storage.get_all_node_indexes();
+        assert_eq!(node_indexes.len(), 2);
+        assert!(node_indexes.contains(&1));
+        assert!(node_indexes.contains(&2));
     }
 }

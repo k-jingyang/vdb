@@ -159,7 +159,7 @@ impl GraphStorage for FreshDisk {
     }
 
     fn get_random_node(&self) -> Option<Node> {
-        self.get_node(0).ok()
+        self.get_node(1).ok()
     }
 
     // unsorted
@@ -168,8 +168,6 @@ impl GraphStorage for FreshDisk {
         let ro_index = self.ro_temp_index.read().unwrap();
         let rw_index = self.rw_temp_index.read().unwrap();
 
-        // TODO: disk's get_all_node_indexes implementation doesn't work when used with fresh_disk
-        // because fresh_disk increment the index maintained in disk
         let mut node_indexes: HashSet<u32> =
             long_term_index.get_all_node_indexes().into_iter().collect();
 

@@ -21,7 +21,7 @@ pub fn debug(
     let nodes = graph.storage.get_all_nodes();
     plotter.set_connected_nodes(&nodes);
 
-    let (closests, _) = graph.greedy_search(0, &[1000.0f32, 1000.0f32], 3, 10);
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
         .filter_map(|&id| graph.storage.get_node(id).ok())
@@ -37,7 +37,7 @@ pub fn debug(
 
     // plot alpha=1.0
     graph.index(1.0).unwrap();
-    let (closests, _) = graph.greedy_search(0, &[1000.0f32, 1000.0f32], 3, 10);
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
         .filter_map(|&id| graph.storage.get_node(id).ok())
@@ -50,7 +50,7 @@ pub fn debug(
 
     // alpha=1.2
     graph.index(1.2).unwrap();
-    let (closests, _) = graph.greedy_search(0, &[1000.0f32, 1000.0f32], 3, 10);
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
         .filter_map(|&id| graph.storage.get_node(id).ok())
@@ -62,7 +62,7 @@ pub fn debug(
         .unwrap();
 
     // insert new node
-    let inserted_node = graph.insert(vec![1000.0, 1000.0], 0, 1.2, 10).unwrap();
+    let inserted_node = graph.insert(vec![1000.0, 1000.0], 1, 1.2, 10).unwrap();
     plotter.set_connected_nodes(&graph.storage.get_all_nodes());
     plotter.set_isolated_nodes(&vec![inserted_node]);
     plotter

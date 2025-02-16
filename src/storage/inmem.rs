@@ -53,13 +53,6 @@ impl GraphStorage for InMemStorage {
     }
 
     fn get_random_node(&self) -> Option<Node> {
-        // if self.nodes.is_empty() {
-        //     None
-        // } else {
-        //     let mut rng = rand::thread_rng();
-        //     let index = rng.gen_range(0..self.nodes.len());
-        //     self.nodes.get(index).cloned()
-        // }
         return self.nodes.get(0).cloned();
     }
 

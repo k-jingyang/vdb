@@ -55,10 +55,10 @@ fn bench_query(c: &mut Criterion) {
         Box::new(vdb::storage::InMemStorage::new()),
     )
     .unwrap();
-    in_mem_graph.index(1.2);
+    in_mem_graph.index(1.2).unwrap();
 
     c.bench_function("[in-mem] query", |b| {
-        b.iter(|| in_mem_graph.greedy_search(0, &[1000.0f32, 1000.0f32], 3, 10));
+        b.iter(|| in_mem_graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10));
     });
 
     let mut disk_graph = graph::Graph::new(
@@ -72,10 +72,10 @@ fn bench_query(c: &mut Criterion) {
     )
     .unwrap();
 
-    disk_graph.index(1.2);
+    disk_graph.index(1.2).unwrap();
 
     c.bench_function("[disk] query", |b| {
-        b.iter(|| disk_graph.greedy_search(0, &[1000.0f32, 1000.0f32], 3, 10));
+        b.iter(|| disk_graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10));
     });
 }
 
