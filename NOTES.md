@@ -8,7 +8,10 @@
 
 ## TODO
 
-- Implement insert/delete based on Fresh-DiskANN
+- Find LSM implementation in Rust
+- Fix fresh disk crashing with 1,000,000 dataset
+  - Better LSM implementation?
+- Implement delete based on Fresh-DiskANN
 - Try out io_uring experiments?
 - io_uring should help with
 - Dig into <https://github.com/infrawhispers/anansi>
@@ -28,3 +31,4 @@
 [x] Explore disk storage representation
 [x] Read Fresh-DiskANN, Filtered-DiskANN
 [x] Arbitrary vector dimension
+[x] Implemented Fresh-DiskANN for insert

@@ -5,8 +5,8 @@ Toy implementation of [Vamana (DiskANN) paper](https://proceedings.neurips.cc/pa
 
 Disclaimer: Since this is only a toy implementation, only the vectors are stored, and not pre-embedded text.
 
-
 ## Table of contents
+
 - [vdb](#vdb)
 - [Table of contents](#table-of-contents)
 - [Plotted graphs](#plotted-graphs)
