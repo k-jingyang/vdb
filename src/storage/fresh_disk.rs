@@ -12,7 +12,7 @@ use super::GraphStorage;
 pub struct FreshDisk {
     long_term_index: Arc<RwLock<crate::NaiveDisk>>,
     delete_list: Vec<u32>, // delete not implemented yet
-    ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
+    ro_temp_index: Arc<RwLock<Vec<HashMap<u32, Node>>>>,
     rw_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
     next_node_index: u32,
 }
@@ -31,14 +31,14 @@ impl FreshDisk {
             free_path,
         )?));
 
-        let ro_temp_index = Arc::new(RwLock::new(HashMap::new()));
-        let rw_temp_index = Arc::new(RwLock::new(HashMap::new()));
+        let ro_temp_index = Arc::new(RwLock::new(vec![]));
+        let rw_temp_index = RwLock::new(HashMap::new());
 
         let fresh_disk = FreshDisk {
             long_term_index: long_term_index.clone(),
             delete_list: Vec::new(),
             ro_temp_index: ro_temp_index.clone(),
-            rw_temp_index: rw_temp_index.clone(),
+            rw_temp_index: Arc::new(rw_temp_index),
             next_node_index: 1, // node_id=0 is reserved to indicate that node doesn't exist
         };
 
@@ -48,42 +48,44 @@ impl FreshDisk {
         std::thread::spawn(move || {
             Self::periodic_flush(long_term_index.clone(), ro_temp_index_flush);
         });
-        std::thread::spawn(move || {
-            Self::check_and_convert_rw_index(rw_temp_index.clone(), ro_temp_index.clone());
-        });
+
         Ok(fresh_disk)
     }
 
-    fn check_and_convert_rw_index(
-        rw_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
-        ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
-    ) {
-        loop {
-            std::thread::sleep(Duration::from_millis(10));
-            let rw_temp = rw_temp_index.read().unwrap();
-            if rw_temp.len() < 10 {
-                continue;
-            }
-            drop(rw_temp);
-
-            println!("Flushing rw_index to ro_index...");
-
-            // TODO: flush rw_index to ro_index. There should be a better way by making ro_temp a list
-            let mut ro_temp = ro_temp_index.write().unwrap();
-            let mut rw_tmp = rw_temp_index.write().unwrap();
-            for (_, node) in rw_tmp.iter() {
-                ro_temp.insert(node.id, node.clone());
-            }
-            rw_tmp.clear();
+    // TODO: This cannot be blocking
+    fn check_and_convert_rw_index(&mut self) {
+        let rw_temp = self.rw_temp_index.read().unwrap();
+        if rw_temp.len() < 10 {
+            return;
         }
+        drop(rw_temp);
+
+        println!("Flushing rw_index to ro_index...");
+
+        let mut ro_temp = self.ro_temp_index.write().unwrap();
+
+        // THIS GG-ed, but why
+        // ro_temp.push(self.rw_temp_index.write().unwrap().clone());
+        // self.rw_temp_index = std::mem::replace(
+        //     &mut self.rw_temp_index,
+        //     Arc::new(RwLock::new(HashMap::new())),
+        // );
+
+        let old_rw_temp_index = std::mem::replace(
+            &mut self.rw_temp_index,
+            Arc::new(RwLock::new(HashMap::new())),
+        );
+
+        ro_temp.push(old_rw_temp_index.write().unwrap().clone());
     }
 
+    // TODO: this flush can use io_uring
     fn periodic_flush(
         long_term_index: Arc<RwLock<crate::NaiveDisk>>,
-        ro_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
+        ro_temp_index: Arc<RwLock<Vec<HashMap<u32, Node>>>>,
     ) {
         loop {
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(Duration::from_secs(30));
 
             let mut ro_temp = ro_temp_index.write().unwrap();
             let mut long_term = long_term_index.write().unwrap();
@@ -95,9 +97,12 @@ impl FreshDisk {
 
             println!("Flushing from ro_temp to long_term...");
 
-            // Flush the ro_temp_index to the long_term_index
-            for (_, node) in ro_temp.iter() {
-                long_term.set_node(node).unwrap();
+            // Flush the ro_temp_index from the back
+            ro_temp.reverse();
+            for index in ro_temp.iter() {
+                for (_, node) in index.iter() {
+                    long_term.set_node(node).unwrap();
+                }
             }
             ro_temp.clear();
 
@@ -120,6 +125,7 @@ impl GraphStorage for FreshDisk {
             created_node_indices.push(self.next_node_index);
             self.next_node_index += 1;
         }
+        self.check_and_convert_rw_index();
         Ok(created_node_indices)
     }
 
@@ -133,9 +139,11 @@ impl GraphStorage for FreshDisk {
             return Ok(node);
         }
 
-        let from_ro_index = self.ro_temp_index.read().unwrap().get(&node_id).cloned();
-        if let Some(node) = from_ro_index {
-            return Ok(node);
+        let from_ro_index = self.ro_temp_index.read().unwrap();
+        for index in from_ro_index.iter().rev() {
+            if let Some(node) = index.get(&node_id) {
+                return Ok(node.clone());
+            }
         }
 
         let node = self.long_term_index.read().unwrap().get_node(node_id)?;
@@ -150,6 +158,7 @@ impl GraphStorage for FreshDisk {
         let mut node = self.get_node(node_index)?;
         node.connected = connections.clone();
         self.rw_temp_index.write().unwrap().insert(node_index, node);
+        self.check_and_convert_rw_index();
         Ok(())
     }
 
@@ -157,7 +166,6 @@ impl GraphStorage for FreshDisk {
         self.get_node(1).ok()
     }
 
-    // unsorted
     fn get_all_node_indexes(&self) -> Result<Vec<u32>> {
         let long_term_index = self.long_term_index.read().unwrap();
         let ro_index = self.ro_temp_index.read().unwrap();
@@ -168,8 +176,10 @@ impl GraphStorage for FreshDisk {
             .into_iter()
             .collect();
 
-        ro_index.keys().for_each(|node_id| {
-            node_indexes.insert(*node_id);
+        ro_index.iter().for_each(|index| {
+            index.keys().for_each(|node_id| {
+                node_indexes.insert(*node_id);
+            });
         });
 
         rw_index.keys().for_each(|node_id| {
@@ -190,8 +200,11 @@ impl GraphStorage for FreshDisk {
         let mut all_nodes: HashMap<u32, Node> = long_term_index.get_all_nodes()?;
         println!("all_nodes from lti: {:?}", all_nodes);
 
-        ro_index.iter().for_each(|(node_id, node)| {
-            all_nodes.insert(*node_id, node.clone());
+        // must read from the first ro_index, because outdated data will be before updated data
+        ro_index.iter().for_each(|index| {
+            for (node_id, node) in index.iter() {
+                all_nodes.insert(*node_id, node.clone());
+            }
         });
 
         rw_index.iter().for_each(|(node_id, node)| {

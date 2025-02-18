@@ -13,73 +13,88 @@ mod constant;
 // disk indexing: 227ms
 //
 
-// Read 1000000 vectors of dimension: 1536
+// Read 1,000,000 vectors of dimension: 1536
 // In-mem graph::new took 324.854365107s
 // In-mem graph::index took 46.901828688s
 // Disk graph::new took 194.129564367s
 // Disk graph::index took 1635.210504063s
 fn main() {
-    let disk = vdb::storage::NaiveDisk::new(
-        VECTOR_DIMENSION,
-        MAX_NEIGHBOUR_COUNT,
-        "disk.index",
-        "disk.free",
-    )
-    .unwrap();
-    let fresh_disk =
-        vdb::storage::FreshDisk::new(2, MAX_NEIGHBOUR_COUNT, "disk.index", "disk.free").unwrap();
-    let in_mem = vdb::storage::InMemStorage::new();
+    // let disk = vdb::storage::NaiveDisk::new(
+    //     VECTOR_DIMENSION,
+    //     MAX_NEIGHBOUR_COUNT,
+    //     "disk.index",
+    //     "disk.free",
+    // )
+    // .unwrap();
+    // let fresh_disk =
+    //     vdb::storage::FreshDisk::new(2, MAX_NEIGHBOUR_COUNT, "disk.index", "disk.free").unwrap();
+    // let in_mem = vdb::storage::InMemStorage::new();
 
-    vdb::vamana::debug(100, 0.0..2000.0, Box::new(fresh_disk));
-    println!("Done debug");
-    std::thread::sleep(Duration::from_secs(100));
+    // vdb::vamana::debug(100, 0.0..2000.0, Box::new(fresh_disk));
+    // println!("Done debug");
+    // std::thread::sleep(Duration::from_secs(100));
+
+    run_dataset_test();
 }
 
 fn run_dataset_test() {
     const MAX_NEIGHBOUR_COUNT: u8 = 5;
-
-    // vdb::vamana::init();
     let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1)
         .unwrap()
         .to_vec();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
 
+    // let start = std::time::Instant::now();
+    // let mut in_mem_graph = vdb::graph::Graph::new(
+    //     &res,
+    //     2,
+    //     MAX_NEIGHBOUR_COUNT,
+    //     Box::new(vdb::storage::InMemStorage::new()),
+    // )
+    // .unwrap();
+    // println!("In-mem graph::new took {:?}", start.elapsed());
+
+    // let start = std::time::Instant::now();
+    // in_mem_graph.index(1.2).unwrap();
+    // println!("In-mem graph::index took {:?}", start.elapsed());
+
+    // let start = std::time::Instant::now();
+    // let mut disk_graph = vdb::graph::Graph::new(
+    //     &res,
+    //     2,
+    //     MAX_NEIGHBOUR_COUNT,
+    //     Box::new(
+    //         vdb::storage::NaiveDisk::new(
+    //             res[0].len() as u16,
+    //             MAX_NEIGHBOUR_COUNT,
+    //             "disk.index",
+    //             "disk.free",
+    //         )
+    //         .unwrap(),
+    //     ),
+    // )
+    // .unwrap();
+    // println!("Disk graph::new took {:?}", start.elapsed());
+
+    // let start = std::time::Instant::now();
+    // disk_graph.index(1.2).unwrap();
+    // println!("Disk graph::index took {:?}", start.elapsed());
+
     let start = std::time::Instant::now();
-    let mut in_mem_graph = vdb::graph::Graph::new(
-        &res,
-        2,
+    let fresh_disk = vdb::storage::FreshDisk::new(
+        res[0].len() as u16,
         MAX_NEIGHBOUR_COUNT,
-        Box::new(vdb::storage::InMemStorage::new()),
+        "disk.index",
+        "disk.free",
     )
     .unwrap();
-    println!("In-mem graph::new took {:?}", start.elapsed());
+    let mut fresh_disk_graph =
+        vdb::graph::Graph::new(&res, 2, MAX_NEIGHBOUR_COUNT, Box::new(fresh_disk)).unwrap();
+    println!("fresh-disk graph::new took {:?}", start.elapsed());
 
     let start = std::time::Instant::now();
-    in_mem_graph.index(1.2).unwrap();
-    println!("In-mem graph::index took {:?}", start.elapsed());
-
-    let start = std::time::Instant::now();
-    in_mem_graph.index(1.2).unwrap();
-    let mut disk_graph = vdb::graph::Graph::new(
-        &res,
-        2,
-        MAX_NEIGHBOUR_COUNT,
-        Box::new(
-            vdb::storage::NaiveDisk::new(
-                res[0].len() as u16,
-                MAX_NEIGHBOUR_COUNT,
-                "disk.index",
-                "disk.free",
-            )
-            .unwrap(),
-        ),
-    )
-    .unwrap();
-    println!("Disk graph::new took {:?}", start.elapsed());
-
-    let start = std::time::Instant::now();
-    disk_graph.index(1.2).unwrap();
-    println!("Disk graph::index took {:?}", start.elapsed());
+    fresh_disk_graph.index(1.2).unwrap();
+    println!("fresh-disk graph::index took {:?}", start.elapsed());
 }
 
 fn read_dataset(
