@@ -52,25 +52,16 @@ impl FreshDisk {
         Ok(fresh_disk)
     }
 
-    // TODO: This cannot be blocking
     fn check_and_convert_rw_index(&mut self) {
         let rw_temp = self.rw_temp_index.read().unwrap();
-        if rw_temp.len() < 10 {
+        if rw_temp.len() < 1000 {
             return;
         }
         drop(rw_temp);
 
-        println!("Flushing rw_index to ro_index...");
+        // println!("Flushing rw_index to ro_index...");
 
         let mut ro_temp = self.ro_temp_index.write().unwrap();
-
-        // THIS GG-ed, but why
-        // ro_temp.push(self.rw_temp_index.write().unwrap().clone());
-        // self.rw_temp_index = std::mem::replace(
-        //     &mut self.rw_temp_index,
-        //     Arc::new(RwLock::new(HashMap::new())),
-        // );
-
         let old_rw_temp_index = std::mem::replace(
             &mut self.rw_temp_index,
             Arc::new(RwLock::new(HashMap::new())),
@@ -85,7 +76,7 @@ impl FreshDisk {
         ro_temp_index: Arc<RwLock<Vec<HashMap<u32, Node>>>>,
     ) {
         loop {
-            std::thread::sleep(Duration::from_secs(30));
+            std::thread::sleep(Duration::from_secs(1));
 
             let mut ro_temp = ro_temp_index.write().unwrap();
             let mut long_term = long_term_index.write().unwrap();
@@ -98,8 +89,7 @@ impl FreshDisk {
             println!("Flushing from ro_temp to long_term...");
 
             // Flush the ro_temp_index from the back
-            ro_temp.reverse();
-            for index in ro_temp.iter() {
+            for index in ro_temp.iter().rev() {
                 for (_, node) in index.iter() {
                     long_term.set_node(node).unwrap();
                 }
@@ -198,7 +188,6 @@ impl GraphStorage for FreshDisk {
 
         // order of insertion must be long term index > ro index > rw index
         let mut all_nodes: HashMap<u32, Node> = long_term_index.get_all_nodes()?;
-        println!("all_nodes from lti: {:?}", all_nodes);
 
         // must read from the first ro_index, because outdated data will be before updated data
         ro_index.iter().for_each(|index| {

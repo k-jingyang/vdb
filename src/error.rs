@@ -6,5 +6,4 @@ pub enum Error {
     // TODO: what is transparent
     #[error(transparent)]
     IO(#[from] std::io::Error),
-    
 }

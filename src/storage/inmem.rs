@@ -44,9 +44,7 @@ impl GraphStorage for InMemStorage {
 
     fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> Result<()> {
         if let Some(node) = self.nodes.get_mut(node_index as usize) {
-            println!("before: {:?}, connections: {:?}", node, connections);
             node.connected = connections.clone();
-            println!("after: {:?}", node);
             Ok(())
         } else {
             Err(Error::InvalidInput("Node not found".to_owned()))
