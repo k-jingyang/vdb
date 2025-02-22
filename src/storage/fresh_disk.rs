@@ -42,11 +42,8 @@ impl FreshDisk {
             next_node_index: 1, // node_index=0 is reserved to indicate that node doesn't exist
         };
 
-        let ro_temp_index_flush = ro_temp_index.clone();
-
-        // TODO: not sure why move even though we clone?
         std::thread::spawn(move || {
-            Self::periodic_flush(long_term_index.clone(), ro_temp_index_flush);
+            Self::periodic_flush(long_term_index, ro_temp_index);
         });
 
         Ok(fresh_disk)
