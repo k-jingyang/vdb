@@ -13,6 +13,7 @@
   - Better LSM implementation?
 - Implement delete based on Fresh-DiskANN
 - Try out io_uring experiments?
+  - Measure syscalls before and after
 - io_uring should help with
 - Dig into <https://github.com/infrawhispers/anansi>
   - How is RocksDB used?
