@@ -7,14 +7,14 @@ use plotters::style::{ShapeStyle, BLUE, RED, WHITE};
 
 use crate::graph::graph::Node;
 
-pub(super) struct Plotter {
+pub struct Plotter {
     all_nodes: HashMap<u32, Node>,
     color_nodes: Vec<Node>,
     x_y_range: std::ops::Range<f32>,
 }
 
 impl Plotter {
-    pub(super) fn new(x_y_range: std::ops::Range<f32>) -> Self {
+    pub fn new(x_y_range: std::ops::Range<f32>) -> Self {
         Plotter {
             all_nodes: HashMap::new(),
             color_nodes: vec![],
@@ -22,19 +22,15 @@ impl Plotter {
         }
     }
 
-    pub(super) fn set_connected_nodes(&mut self, nodes: &HashMap<u32, Node>) {
+    pub fn set_connected_nodes(&mut self, nodes: &HashMap<u32, Node>) {
         self.all_nodes = nodes.clone();
     }
 
-    pub(super) fn set_isolated_nodes(&mut self, nodes: &Vec<Node>) {
+    pub fn set_isolated_nodes(&mut self, nodes: &Vec<Node>) {
         self.color_nodes = nodes.clone();
     }
 
-    pub(super) fn plot(
-        &self,
-        file_name: &str,
-        title: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn plot(&self, file_name: &str, title: &str) -> Result<(), Box<dyn std::error::Error>> {
         let root = BitMapBackend::new(file_name, (1024, 1024)).into_drawing_area();
         root.fill(&WHITE).unwrap();
 

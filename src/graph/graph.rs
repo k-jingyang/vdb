@@ -8,7 +8,7 @@ use std::{
 };
 
 pub struct Graph {
-    pub(crate) storage: Box<dyn GraphStorage>,
+    pub storage: Box<dyn GraphStorage>,
     pub(crate) max_neighbour_count: usize,
 }
 

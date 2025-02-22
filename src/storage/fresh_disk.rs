@@ -39,7 +39,7 @@ impl FreshDisk {
             delete_list: Vec::new(),
             ro_temp_index: ro_temp_index.clone(),
             rw_temp_index: Arc::new(rw_temp_index),
-            next_node_index: 1, // node_id=0 is reserved to indicate that node doesn't exist
+            next_node_index: 1, // node_index=0 is reserved to indicate that node doesn't exist
         };
 
         let ro_temp_index_flush = ro_temp_index.clone();
@@ -59,8 +59,6 @@ impl FreshDisk {
         }
         drop(rw_temp);
 
-        // println!("Flushing rw_index to ro_index...");
-
         let mut ro_temp = self.ro_temp_index.write().unwrap();
         let old_rw_temp_index = std::mem::replace(
             &mut self.rw_temp_index,
@@ -70,32 +68,31 @@ impl FreshDisk {
         ro_temp.push(old_rw_temp_index.write().unwrap().clone());
     }
 
-    // TODO: this flush can use io_uring
     fn periodic_flush(
         long_term_index: Arc<RwLock<crate::NaiveDisk>>,
         ro_temp_index: Arc<RwLock<Vec<HashMap<u32, Node>>>>,
     ) {
         loop {
+            // TODO: What's a good configuration for this flushing
             std::thread::sleep(Duration::from_secs(1));
 
             let mut ro_temp = ro_temp_index.write().unwrap();
             let mut long_term = long_term_index.write().unwrap();
 
             if ro_temp.len() == 0 {
-                // println!("Nothing to flush");
                 continue;
             }
 
             println!("Flushing from ro_temp to long_term...");
 
             // Flush the ro_temp_index from the back
+            // TODO: this flush can be improved using io_uring
             for index in ro_temp.iter().rev() {
                 for (_, node) in index.iter() {
                     long_term.set_node(node).unwrap();
                 }
             }
             ro_temp.clear();
-
             println!("Flushing done...");
         }
     }

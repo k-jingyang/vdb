@@ -1,9 +1,45 @@
 #![warn(unused_extern_crates)]
-use std::time::Duration;
 
-use constant::{MAX_NEIGHBOUR_COUNT, VECTOR_DIMENSION};
+use std::fs;
+
+use chrono::Local;
+use clap::{Parser, ValueEnum};
 use polars::{export::num::ToPrimitive, prelude::*};
+use vdb::{storage, vector::generate_random_vectors, Node};
 mod constant;
+
+/// Simple program to greet a person
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Storage type to use
+    #[arg(value_enum)]
+    storage_type: Storage,
+
+    /// Type of dataset to run test with
+    #[arg(value_enum)]
+    dataset: Dataset,
+}
+
+#[derive(Copy, Clone, Debug, ValueEnum, PartialEq)]
+pub enum Storage {
+    /// In-mem
+    InMem = 0,
+    /// Pure disk
+    PureDisk = 1,
+    /// FreshDiskANN
+    FreshDisk = 2,
+}
+
+#[derive(Copy, Clone, ValueEnum)]
+enum Dataset {
+    /// dbpedia-entities-openai-1M, 1 million vectors of 1536 dimensions
+    Dbpedia,
+    /// randomly generated 2 thousand vectors of 2 dimensions. Visual graphs plotted under static/${date}
+    Debug,
+}
+
+const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
 // 1000 vectors of 1536 dimensions
 // in-mem indexing: 19ms
@@ -22,82 +58,41 @@ mod constant;
 // fresh-disk graph::new took 85.325s
 // fresh-disk graph::index took 442.031s
 fn main() {
-    // let disk = vdb::storage::NaiveDisk::new(
-    //     VECTOR_DIMENSION,
-    //     MAX_NEIGHBOUR_COUNT,
-    //     "disk.index",
-    //     "disk.free",
-    // )
-    // .unwrap();
-    // let fresh_disk =
-    //     vdb::storage::FreshDisk::new(2, MAX_NEIGHBOUR_COUNT, "disk.index", "disk.free").unwrap();
-    // let in_mem = vdb::storage::InMemStorage::new();
+    let args = Args::parse();
 
-    // vdb::vamana::debug(100, 0.0..2000.0, Box::new(fresh_disk));
-    // println!("Done debug");
-    // std::thread::sleep(Duration::from_secs(100));
+    match args.dataset {
+        Dataset::Dbpedia => run_dataset_test(args.storage_type),
+        Dataset::Debug => {
+            debug(
+                2000,
+                std::ops::Range {
+                    start: 2000.0,
+                    end: 2000.0,
+                },
+                args.storage_type,
+            );
 
-    run_dataset_test();
+            if args.storage_type == Storage::FreshDisk {
+                std::thread::sleep(std::time::Duration::from_secs(10));
+            }
+        }
+    }
 }
 
-fn run_dataset_test() {
-    const MAX_NEIGHBOUR_COUNT: u8 = 5;
+fn run_dataset_test(storage_type: Storage) {
     let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1)
         .unwrap()
         .to_vec();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
 
+    let storage = new_storage(storage_type, res[0].len() as u16, MAX_NEIGHBOUR_COUNT);
     let start = std::time::Instant::now();
-    let mut in_mem_graph = vdb::graph::Graph::new(
-        &res,
-        2,
-        MAX_NEIGHBOUR_COUNT,
-        Box::new(vdb::storage::InMemStorage::new()),
-    )
-    .unwrap();
-    println!("In-mem graph::new took {:?}", start.elapsed());
+    let mut graph = vdb::graph::Graph::new(&res, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
+    println!("{:?} graph::new took {:?}", storage_type, start.elapsed());
 
     let start = std::time::Instant::now();
-    in_mem_graph.index(1.2).unwrap();
-    println!("In-mem graph::index took {:?}", start.elapsed());
-
-    // let start = std::time::Instant::now();
-    // let mut disk_graph = vdb::graph::Graph::new(
-    //     &res,
-    //     2,
-    //     MAX_NEIGHBOUR_COUNT,
-    //     Box::new(
-    //         vdb::storage::NaiveDisk::new(
-    //             res[0].len() as u16,
-    //             MAX_NEIGHBOUR_COUNT,
-    //             "disk.index",
-    //             "disk.free",
-    //         )
-    //         .unwrap(),
-    //     ),
-    // )
-    // .unwrap();
-    // println!("Disk graph::new took {:?}", start.elapsed());
-
-    // let start = std::time::Instant::now();
-    // disk_graph.index(1.2).unwrap();
-    // println!("Disk graph::index took {:?}", start.elapsed());
-
-    // let start = std::time::Instant::now();
-    // let fresh_disk = vdb::storage::FreshDisk::new(
-    //     res[0].len() as u16,
-    //     MAX_NEIGHBOUR_COUNT,
-    //     "disk.index",
-    //     "disk.free",
-    // )
-    // .unwrap();
-    // let mut fresh_disk_graph =
-    //     vdb::graph::Graph::new(&res, 2, MAX_NEIGHBOUR_COUNT, Box::new(fresh_disk)).unwrap();
-    // println!("fresh-disk graph::new took {:?}", start.elapsed());
-
-    // let start = std::time::Instant::now();
-    // fresh_disk_graph.index(1.2).unwrap();
-    // println!("fresh-disk graph::index took {:?}", start.elapsed());
+    graph.index(1.2).unwrap();
+    println!("{:?} graph::index took {:?}", storage_type, start.elapsed());
 }
 
 fn read_dataset(
@@ -131,4 +126,88 @@ fn read_dataset(
     }
 
     Ok(result)
+}
+
+pub fn debug(
+    seed_dataset_size: usize,
+    vector_value_range: std::ops::Range<f32>,
+    storage_type: Storage,
+) {
+    let test_vectors = generate_random_vectors(seed_dataset_size, &vector_value_range, 2);
+    let storage = new_storage(
+        storage_type,
+        test_vectors[0].len() as u16,
+        MAX_NEIGHBOUR_COUNT,
+    );
+    let mut graph = vdb::graph::Graph::new(&test_vectors, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
+    let mut plotter = vdb::plotter::Plotter::new(vector_value_range.clone());
+
+    // plot initial
+    let nodes = graph.storage.get_all_nodes().unwrap();
+    plotter.set_connected_nodes(&nodes);
+
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
+    let closest_nodes: Vec<Node> = closests
+        .iter()
+        .filter_map(|&id| graph.storage.get_node(id).ok())
+        .collect();
+    plotter.set_isolated_nodes(&closest_nodes);
+
+    let path = format!("static/{}/", Local::now().format("%Y-%m-%d"));
+    fs::create_dir_all(&path).unwrap();
+    plotter
+        .plot(&format!("{}/graph-initial.png", path), "Initial graph")
+        .unwrap();
+
+    // plot alpha=1.0
+    graph.index(1.0).unwrap();
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
+    let closest_nodes: Vec<Node> = closests
+        .iter()
+        .filter_map(|&id| graph.storage.get_node(id).ok())
+        .collect();
+    plotter.set_isolated_nodes(&closest_nodes);
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
+    plotter
+        .plot(&format!("{}/graph-1.png", path), "first pass, α=1")
+        .unwrap();
+
+    // alpha=1.2
+    graph.index(1.2).unwrap();
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
+    let closest_nodes: Vec<Node> = closests
+        .iter()
+        .filter_map(|&id| graph.storage.get_node(id).ok())
+        .collect();
+    plotter.set_isolated_nodes(&closest_nodes);
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
+    plotter
+        .plot(&format!("{}/graph-2.png", path), "second pass, α=1.2")
+        .unwrap();
+
+    // insert new node
+    let inserted_node = graph.insert(vec![1000.0, 1000.0], 1, 1.2, 10).unwrap();
+    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
+    plotter.set_isolated_nodes(&vec![inserted_node]);
+    plotter
+        .plot(&format!("{}/graph-3.png", path), "inserted")
+        .unwrap();
+}
+
+fn new_storage(
+    storage_type: Storage,
+    dimensions: u16,
+    max_neighbour_count: u8,
+) -> Box<dyn storage::GraphStorage> {
+    match storage_type {
+        Storage::InMem => Box::new(storage::InMemStorage::new()),
+        Storage::PureDisk => Box::new(
+            storage::NaiveDisk::new(dimensions, max_neighbour_count, "disk.index", "disk.free")
+                .unwrap(),
+        ),
+        Storage::FreshDisk => Box::new(
+            storage::FreshDisk::new(dimensions, max_neighbour_count, "disk.index", "disk.free")
+                .unwrap(),
+        ),
+    }
 }
