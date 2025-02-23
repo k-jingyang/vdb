@@ -8,6 +8,7 @@
 
 ## TODO
 
+- Read LSM tree implementation to see background process implementation
 - qdrant benchmarking
 - Identify fresh disk flushing making PC sluggish
 - Implement delete based on Fresh-DiskANN

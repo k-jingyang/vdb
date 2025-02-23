@@ -10,14 +10,15 @@ mod cli;
 
 const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
-// 1000 vectors of 1536 dimensions
-// in-mem indexing: 19ms
-// disk indexing: 22s
-// difference is 1000x
-// after opimitisation of single read:
-// disk indexing: 227ms
+// 38461 vectors of 1536 dimensions
+// in-mem indexing: 842.50ms
+// disk indexing: 13.25s
+// fresh-disk graph::index took 2.11s (before io_uring optimisation)
 //
-// Read 1,000,000 vectors of dimension: 1536
+// syscalls count for fresh-disk (before io_uring optimisation)
+// - 480680
+//
+// 1,000,000 vectors of dimension: 1536
 // In-mem graph::new took 5.854s
 // In-mem graph::index took 46.901s
 //
@@ -49,7 +50,7 @@ fn main() {
 }
 
 fn run_dataset_test(storage_type: Storage) {
-    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1)
+    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1)
         .unwrap()
         .to_vec();
     println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
