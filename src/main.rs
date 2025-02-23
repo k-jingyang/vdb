@@ -1,43 +1,12 @@
 #![warn(unused_extern_crates)]
 
-use std::fs;
-
 use chrono::Local;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
+use cli::{Args, Dataset, Storage};
 use polars::{export::num::ToPrimitive, prelude::*};
+use std::fs;
 use vdb::{storage, vector::generate_random_vectors, Node};
-mod constant;
-
-/// Simple program to greet a person
-#[derive(Parser)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// Storage type to use
-    #[arg(value_enum)]
-    storage_type: Storage,
-
-    /// Type of dataset to run test with
-    #[arg(value_enum)]
-    dataset: Dataset,
-}
-
-#[derive(Copy, Clone, Debug, ValueEnum, PartialEq)]
-pub enum Storage {
-    /// In-mem
-    InMem = 0,
-    /// Pure disk
-    PureDisk = 1,
-    /// FreshDiskANN
-    FreshDisk = 2,
-}
-
-#[derive(Copy, Clone, ValueEnum)]
-enum Dataset {
-    /// dbpedia-entities-openai-1M, 1 million vectors of 1536 dimensions
-    Dbpedia,
-    /// randomly generated 2 thousand vectors of 2 dimensions. Visual graphs plotted under static/${date}
-    Debug,
-}
+mod cli;
 
 const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
@@ -55,8 +24,8 @@ const MAX_NEIGHBOUR_COUNT: u8 = 5;
 // Disk graph::new took 194.129s
 // Disk graph::index took 1635.210s
 //
-// fresh-disk graph::new took 85.325s
-// fresh-disk graph::index took 442.031s
+// fresh-disk graph::new took 85.325s 158.42s, 111.485s
+// fresh-disk graph::index took 498.031s
 fn main() {
     let args = Args::parse();
 
@@ -128,7 +97,7 @@ fn read_dataset(
     Ok(result)
 }
 
-pub fn debug(
+fn debug(
     seed_dataset_size: usize,
     vector_value_range: std::ops::Range<f32>,
     storage_type: Storage,

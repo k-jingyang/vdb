@@ -8,16 +8,14 @@
 
 ## TODO
 
-- Find LSM implementation in Rust
-- Fix fresh disk crashing with 1,000,000 dataset
-  - Better LSM implementation?
+- qdrant benchmarking
+- Identify fresh disk flushing making PC sluggish
 - Implement delete based on Fresh-DiskANN
 - Try out io_uring experiments?
   - Measure syscalls before and after
 - io_uring should help with
 - Dig into <https://github.com/infrawhispers/anansi>
   - How is RocksDB used?
-- qdrant benchmarking
 - How would this be sharded/scaled across machines?
 
 ## Questions
@@ -26,10 +24,11 @@
   - Can reference LSM tree
 - f32 vs f64
 - how did simsimd extend f32::
-  
+
 ## Done
 
 [x] Explore disk storage representation
 [x] Read Fresh-DiskANN, Filtered-DiskANN
 [x] Arbitrary vector dimension
 [x] Implemented Fresh-DiskANN for insert
+[x] Tested Fresh-DiskANN for 1 million vectors

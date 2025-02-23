@@ -1,4 +1,3 @@
-pub(crate) mod constant;
 pub mod error;
 pub mod graph;
 pub mod prelude;

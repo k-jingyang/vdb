@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 chrono = "0.4.39"
+clap = { version = "4.5.30", features = ["derive"] }
 plotters = "0.3.7"
 polars = { version = "0.26.1", features = ["lazy", "temporal", "describe", "json", "parquet", "dtype-datetime"] }
 rand = "0.8.5"

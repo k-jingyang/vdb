@@ -9,7 +9,6 @@ fn bench_index(c: &mut Criterion) {
 
     let test_vectors = vdb::vector::generate_random_vectors(SIZE, &VALUE_RANGE, DIMENSION as usize);
 
-    // todo: how to initialise inmem_storage outside closure
     c.bench_function("[in-mem] create and index graph", |b| {
         b.iter(|| {
             create_and_index_graph(
