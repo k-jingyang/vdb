@@ -13,23 +13,45 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn new(
-        input: &[Vec<f32>],
+    pub fn new<I>(
+        input: I,
         r: usize,
         max_neighbour_count: u8,
         mut store: Box<dyn GraphStorage>,
-    ) -> Result<Self> {
-        let new_nodes_indices = store.add_nodes(input)?;
+    ) -> Result<Self>
+    where
+        I: Iterator<Item = Vec<Vec<f32>>>,
+    {
+        let mut batch_input: Vec<Vec<f32>> = vec![];
         let mut new_nodes: Vec<Node> = Vec::new();
+        let batch_size = 1000;
 
-        for i in 0..new_nodes_indices.len() {
-            let node_index = new_nodes_indices[i];
-            let node = Node {
-                id: node_index,
-                vector: input[i].clone(),
-                connected: HashSet::new(),
-            };
-            new_nodes.push(node);
+        for vecs in input {
+            for vec in vecs {
+                batch_input.push(vec);
+                if batch_input.len() == batch_size {
+                    let batch_indices = store.add_nodes(&batch_input)?;
+                    for (i, &node_index) in batch_indices.iter().enumerate() {
+                        new_nodes.push(Node {
+                            id: node_index,
+                            vector: batch_input[i].clone(),
+                            connected: HashSet::new(),
+                        });
+                    }
+                    batch_input.clear();
+                }
+            }
+        }
+
+        if !batch_input.is_empty() {
+            let batch_indices = store.add_nodes(&batch_input)?;
+            for (i, &node_index) in batch_indices.iter().enumerate() {
+                new_nodes.push(Node {
+                    id: node_index,
+                    vector: batch_input[i].clone(),
+                    connected: HashSet::new(),
+                });
+            }
         }
 
         // for each node, connect it to random r nodes

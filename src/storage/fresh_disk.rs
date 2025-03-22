@@ -1,6 +1,6 @@
 use crate::{prelude::Error, prelude::*, Node};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, RwLock},
     time::Duration,
 };
@@ -12,7 +12,7 @@ use super::GraphStorage;
 pub struct FreshDisk {
     long_term_index: Arc<RwLock<crate::NaiveDisk>>,
     delete_list: Vec<u32>, // delete not implemented yet
-    ro_temp_index: Arc<RwLock<Vec<HashMap<u32, Node>>>>,
+    ro_temp_index: Arc<RwLock<VecDeque<HashMap<u32, Node>>>>,
     rw_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
     next_node_index: u32,
 }
@@ -31,7 +31,7 @@ impl FreshDisk {
             free_path,
         )?));
 
-        let ro_temp_index = Arc::new(RwLock::new(vec![]));
+        let ro_temp_index = Arc::new(RwLock::new(VecDeque::new()));
         let rw_temp_index = RwLock::new(HashMap::new());
 
         let fresh_disk = FreshDisk {
@@ -51,45 +51,53 @@ impl FreshDisk {
 
     fn check_and_convert_rw_index(&mut self) {
         let rw_temp = self.rw_temp_index.read().unwrap();
-        if rw_temp.len() < 1000 {
+        if rw_temp.len() < 10000 {
             return;
         }
         drop(rw_temp);
 
-        let mut ro_temp = self.ro_temp_index.write().unwrap();
         let old_rw_temp_index = std::mem::replace(
             &mut self.rw_temp_index,
             Arc::new(RwLock::new(HashMap::new())),
         );
-
-        ro_temp.push(old_rw_temp_index.write().unwrap().clone());
+        let mut ro_temp = self.ro_temp_index.write().unwrap();
+        ro_temp.push_back(old_rw_temp_index.write().unwrap().clone());
     }
 
+    // TODO: is there a way to compact the ro index
     fn periodic_flush(
         long_term_index: Arc<RwLock<crate::NaiveDisk>>,
-        ro_temp_index: Arc<RwLock<Vec<HashMap<u32, Node>>>>,
+        ro_temp_index: Arc<RwLock<VecDeque<HashMap<u32, Node>>>>,
     ) {
         loop {
             // TODO: What's a good configuration for this flushing
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_millis(300));
 
-            let mut ro_temp = ro_temp_index.write().unwrap();
-            let mut long_term = long_term_index.write().unwrap();
-
+            // To prevent a long lock on ro_temp_index, we get what we need to flush,
+            // flush it, then remove it from the ro_temp_index
+            //
+            //
+            // ro_temp_index lock here blocks check_and_convert_rw_index
+            let ro_temp = ro_temp_index.read().unwrap();
             if ro_temp.len() == 0 {
                 continue;
             }
+            println!("size of ro_temp: {}", ro_temp.len());
+            println!("size of to_flush: {}", ro_temp.front().unwrap().len());
+            let to_flush = ro_temp.front().unwrap().clone();
+            drop(ro_temp);
 
+            let mut long_term = long_term_index.write().unwrap();
             println!("Flushing from ro_temp to long_term...");
 
             // Flush the ro_temp_index from the back
             // TODO: this flush can be improved using io_uring
-            for index in ro_temp.iter().rev() {
-                for (_, node) in index.iter() {
-                    long_term.set_node(node).unwrap();
-                }
+            for (_, node) in to_flush.iter() {
+                long_term.set_node(node).unwrap();
             }
-            ro_temp.clear();
+            drop(long_term);
+
+            ro_temp_index.write().unwrap().pop_front();
             println!("Flushing done...");
         }
     }
@@ -108,8 +116,8 @@ impl GraphStorage for FreshDisk {
             self.rw_temp_index.write().unwrap().insert(node.id, node);
             created_node_indices.push(self.next_node_index);
             self.next_node_index += 1;
+            self.check_and_convert_rw_index();
         }
-        self.check_and_convert_rw_index();
         Ok(created_node_indices)
     }
 

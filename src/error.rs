@@ -4,4 +4,6 @@ pub enum Error {
     InvalidInput(String),
     #[error(transparent)]
     IO(#[from] std::io::Error),
+    #[error(transparent)]
+    PolarsError(#[from] polars::error::PolarsError),
 }

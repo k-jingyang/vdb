@@ -5,7 +5,7 @@ use clap::Parser;
 use cli::{Args, Dataset, Storage};
 use polars::{export::num::ToPrimitive, prelude::*};
 use std::fs;
-use vdb::{storage, vector::generate_random_vectors, Node};
+use vdb::{prelude::Result, storage, vector::generate_random_vectors, Node};
 mod cli;
 
 const MAX_NEIGHBOUR_COUNT: u8 = 5;
@@ -50,14 +50,12 @@ fn main() {
 }
 
 fn run_dataset_test(storage_type: Storage) {
-    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1)
-        .unwrap()
-        .to_vec();
-    println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
-
-    let storage = new_storage(storage_type, res[0].len() as u16, MAX_NEIGHBOUR_COUNT);
+    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1);
+    // TODO: hardcode dimensions for now
+    // println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
+    let storage = new_storage(storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
     let start = std::time::Instant::now();
-    let mut graph = vdb::graph::Graph::new(&res, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
+    let mut graph = vdb::graph::Graph::new(res, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
     println!("{:?} graph::new took {:?}", storage_type, start.elapsed());
 
     let start = std::time::Instant::now();
@@ -65,13 +63,27 @@ fn run_dataset_test(storage_type: Storage) {
     println!("{:?} graph::index took {:?}", storage_type, start.elapsed());
 }
 
-fn read_dataset(
-    dataset_path: &str,
-    ingest_files: i64,
-) -> Result<Vec<Vec<f32>>, Box<dyn std::error::Error>> {
+fn read_datafile(file: &str) -> Vec<Vec<f32>> {
+    let args = ScanArgsParquet::default();
+    let df = LazyFrame::scan_parquet(file, args)
+        .unwrap()
+        .collect()
+        .unwrap();
+    let vector_column = df.column("openai").unwrap().list().unwrap();
+    fn parse_vector(arr: Option<Series>) -> Vec<f32> {
+        let series = arr.ok_or("series not found").unwrap();
+        let arr_value = series.f64().unwrap();
+        let single_vector: Vec<f32> = arr_value.into_iter().filter_map(|x| x?.to_f32()).collect();
+        single_vector
+    }
+    let vecs = vector_column.into_iter().map(parse_vector);
+    vecs.collect()
+}
+
+fn read_dataset(dataset_path: &str, ingest_files: i64) -> impl Iterator<Item = Vec<Vec<f32>>> {
     let mut paths = Vec::new();
-    for entry in std::fs::read_dir(dataset_path)? {
-        let entry = entry?;
+    for entry in std::fs::read_dir(dataset_path).unwrap() {
+        let entry = entry.unwrap();
         let path = entry.path();
         if path.is_file() && path.extension().unwrap() == "parquet" {
             if ingest_files >= 0 && paths.len() == ingest_files as usize {
@@ -81,21 +93,10 @@ fn read_dataset(
         }
     }
 
-    let args = ScanArgsParquet::default();
-
-    let mut result = Vec::new();
-    for path in paths {
-        let df = LazyFrame::scan_parquet(path.as_str(), args.clone())?.collect()?;
-        let list_column = df.column("openai")?.list()?;
-        for arr in list_column.into_iter() {
-            let series = arr.ok_or("series not found")?;
-            let arr_value = series.f64()?;
-            let vec: Vec<f32> = arr_value.into_iter().filter_map(|x| x?.to_f32()).collect();
-            result.push(vec);
-        }
-    }
-
-    Ok(result)
+    let vec_iter = paths
+        .into_iter()
+        .map(|path: String| -> _ { read_datafile(&path) });
+    vec_iter
 }
 
 fn debug(
@@ -109,7 +110,13 @@ fn debug(
         test_vectors[0].len() as u16,
         MAX_NEIGHBOUR_COUNT,
     );
-    let mut graph = vdb::graph::Graph::new(&test_vectors, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
+    let mut graph = vdb::graph::Graph::new(
+        vec![test_vectors].into_iter(),
+        2,
+        MAX_NEIGHBOUR_COUNT,
+        storage,
+    )
+    .unwrap();
     let mut plotter = vdb::plotter::Plotter::new(vector_value_range.clone());
 
     // plot initial
