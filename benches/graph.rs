@@ -48,7 +48,7 @@ fn bench_query(c: &mut Criterion) {
 
     let test_vectors = vdb::vector::generate_random_vectors(SIZE, &VALUE_RANGE, DIMENSION as usize);
     let mut in_mem_graph = graph::Graph::new(
-        &test_vectors,
+        vec![test_vectors.clone()].into_iter(),
         2,
         MAX_NEIGHBOUR_COUNT,
         Box::new(vdb::storage::InMemStorage::new()),
@@ -61,7 +61,7 @@ fn bench_query(c: &mut Criterion) {
     });
 
     let mut disk_graph = graph::Graph::new(
-        &test_vectors,
+        vec![test_vectors].into_iter(),
         2,
         MAX_NEIGHBOUR_COUNT,
         Box::new(
@@ -85,8 +85,13 @@ fn create_and_index_graph(
 ) {
     const R: usize = 2;
 
-    let mut graph =
-        graph::Graph::new(&test_vectors, R, max_neighbour_count, storage_factory()).unwrap();
+    let mut graph = graph::Graph::new(
+        vec![test_vectors.clone()].into_iter(),
+        R,
+        max_neighbour_count,
+        storage_factory(),
+    )
+    .unwrap();
 
     graph.index(1.0).unwrap();
 }

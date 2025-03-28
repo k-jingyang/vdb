@@ -1,20 +1,21 @@
 use crate::{prelude::Error, prelude::*, Node};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, RwLock},
+    sync::{Arc, Condvar, Mutex, RwLock},
     time::Duration,
 };
 
 use super::GraphStorage;
 
 // FreshDisk is the storage implementation of the system described in the FreshDiskANN paper
-// Note: current impl is buggy because of data races
 pub struct FreshDisk {
     long_term_index: Arc<RwLock<crate::NaiveDisk>>,
     delete_list: Vec<u32>, // delete not implemented yet
     ro_temp_index: Arc<RwLock<VecDeque<HashMap<u32, Node>>>>,
     rw_temp_index: Arc<RwLock<HashMap<u32, Node>>>,
     next_node_index: u32,
+    ready: Arc<Mutex<bool>>,
+    condvar: Arc<Condvar>,
 }
 
 impl FreshDisk {
@@ -34,16 +35,21 @@ impl FreshDisk {
         let ro_temp_index = Arc::new(RwLock::new(VecDeque::new()));
         let rw_temp_index = RwLock::new(HashMap::new());
 
+        let ready = Arc::new(Mutex::new(false));
+        let condvar = Arc::new(Condvar::new());
+
         let fresh_disk = FreshDisk {
             long_term_index: long_term_index.clone(),
             delete_list: Vec::new(),
             ro_temp_index: ro_temp_index.clone(),
             rw_temp_index: Arc::new(rw_temp_index),
             next_node_index: 1, // node_index=0 is reserved to indicate that node doesn't exist
+            ready: ready.clone(),
+            condvar: condvar.clone(),
         };
 
         std::thread::spawn(move || {
-            Self::periodic_flush(long_term_index, ro_temp_index);
+            Self::periodic_flush(long_term_index, ro_temp_index, ready, condvar);
         });
 
         Ok(fresh_disk)
@@ -62,44 +68,50 @@ impl FreshDisk {
         );
         let mut ro_temp = self.ro_temp_index.write().unwrap();
         ro_temp.push_back(old_rw_temp_index.write().unwrap().clone());
+
+        // notify that ro_temp can be flushed
+        let mut ready = self.ready.lock().unwrap();
+        *ready = true;
+        self.condvar.notify_all();
     }
 
-    // TODO: is there a way to compact the ro index
     fn periodic_flush(
         long_term_index: Arc<RwLock<crate::NaiveDisk>>,
         ro_temp_index: Arc<RwLock<VecDeque<HashMap<u32, Node>>>>,
+        ready: Arc<Mutex<bool>>,
+        condvar: Arc<Condvar>,
     ) {
         loop {
-            // TODO: What's a good configuration for this flushing
-            std::thread::sleep(Duration::from_millis(300));
+            Self::wait_for_ready_and_reset(ready.clone(), condvar.clone());
 
-            // To prevent a long lock on ro_temp_index, we get what we need to flush,
-            // flush it, then remove it from the ro_temp_index
-            //
-            //
-            // ro_temp_index lock here blocks check_and_convert_rw_index
             let ro_temp = ro_temp_index.read().unwrap();
-            if ro_temp.len() == 0 {
-                continue;
-            }
-            println!("size of ro_temp: {}", ro_temp.len());
-            println!("size of to_flush: {}", ro_temp.front().unwrap().len());
-            let to_flush = ro_temp.front().unwrap().clone();
+            let to_flush_length = ro_temp.len();
             drop(ro_temp);
 
-            let mut long_term = long_term_index.write().unwrap();
-            println!("Flushing from ro_temp to long_term...");
+            for _ in 0..to_flush_length {
+                let ro_temp = ro_temp_index.read().unwrap();
+                let to_flush = ro_temp.front().unwrap().clone();
+                drop(ro_temp);
 
-            // Flush the ro_temp_index from the back
-            // TODO: this flush can be improved using io_uring
-            for (_, node) in to_flush.iter() {
-                long_term.set_node(node).unwrap();
+                let mut long_term = long_term_index.write().unwrap();
+
+                // Flush the ro_temp_index from the back
+                // TODO: this flush can be improved using io_uring
+                for (_, node) in to_flush.iter() {
+                    long_term.set_node(node).unwrap();
+                }
+                drop(long_term);
+                ro_temp_index.write().unwrap().pop_front();
             }
-            drop(long_term);
-
-            ro_temp_index.write().unwrap().pop_front();
-            println!("Flushing done...");
         }
+    }
+
+    fn wait_for_ready_and_reset(ready: Arc<Mutex<bool>>, condvar: Arc<Condvar>) {
+        let mut ready = ready.lock().unwrap();
+        while !*ready {
+            ready = condvar.wait(ready).unwrap();
+        }
+        *ready = false
     }
 }
 

@@ -14,6 +14,7 @@ Disclaimer: Since this is only a toy implementation, only the vectors are stored
 - [Improving indexing performance with SIMD](#improving-indexing-performance-with-simd)
   - [Profiling](#profiling)
   - [Using SIMD to calculate euclidean distance](#using-simd-to-calculate-euclidean-distance)
+- [Streaming the dataset](#streaming-the-dataset)
 - [Benchmarking](#benchmarking)
 
 ## Plotted graphs
@@ -33,7 +34,6 @@ The blue points are the top 3 results from trying to `greedy_search(1000.0,1000.
 <img src="static/graph-2.png" alt="Second Pass, α=2" width="50%">
 
 ## Hardware
-
 
 ## Improving indexing performance with SIMD
 
@@ -85,6 +85,10 @@ The full in-mem indexing's latency now takes around `40s~47s`, about a 5x improv
 <img src="static/after_simd_flamegraph.svg" alt="flamegraph" width="100%">
 
 > See the `vdb::graph::graph::Graph::Index` trace
+
+## Streaming the dataset
+
+// TODO
 
 ## Benchmarking
 

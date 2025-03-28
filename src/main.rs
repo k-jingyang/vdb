@@ -27,6 +27,9 @@ const MAX_NEIGHBOUR_COUNT: u8 = 5;
 //
 // fresh-disk graph::new took 85.325s 158.42s, 111.485s
 // fresh-disk graph::index took 498.031s
+//
+// fresh-disk graph::new took 56.838s
+// fresh-disk graph::index took 163.65
 fn main() {
     let args = Args::parse();
 
@@ -52,7 +55,6 @@ fn main() {
 fn run_dataset_test(storage_type: Storage) {
     let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1);
     // TODO: hardcode dimensions for now
-    // println!("Read {} vectors of dimension: {}", res.len(), res[0].len());
     let storage = new_storage(storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
     let start = std::time::Instant::now();
     let mut graph = vdb::graph::Graph::new(res, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
