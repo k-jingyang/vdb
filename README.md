@@ -88,7 +88,11 @@ The full in-mem indexing's latency now takes around `40s~47s`, about a 5x improv
 
 ## Streaming the dataset
 
-// TODO
+While trying to use the load and index `dbpedia-entities-openai-1M` the dataset via my DiskANN implement. The process would hang/OOM, as the full dataset is 18G and I would have other processes running on my PC. 
+
+To mitigate this, instead of loading in the full dataset, the vectors are loaded from each file lazily via an `Iterator`.
+
+- Noted that this interferes with indexing latency
 
 ## Benchmarking
 

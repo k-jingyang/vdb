@@ -8,9 +8,8 @@
 
 ## TODO
 
-- Read LSM tree implementation to see background process implementation
+- Implement search?
 - qdrant benchmarking
-- Identify fresh disk flushing making PC sluggish
 - Implement delete based on Fresh-DiskANN
 - Try out io_uring experiments?
   - Measure syscalls before and after
@@ -33,3 +32,5 @@
 [x] Arbitrary vector dimension
 [x] Implemented Fresh-DiskANN for insert
 [x] Tested Fresh-DiskANN for 1 million vectors
+[x] Identify fresh disk flushing making PC sluggish
+[x] Read LSM tree implementation to see background process implementation
