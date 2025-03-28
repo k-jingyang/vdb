@@ -10,12 +10,10 @@ Disclaimer: Since this is only a toy implementation, only the vectors are stored
 - [vdb](#vdb)
 - [Table of contents](#table-of-contents)
 - [Plotted graphs](#plotted-graphs)
-- [Hardware](#hardware)
 - [Improving indexing performance with SIMD](#improving-indexing-performance-with-simd)
   - [Profiling](#profiling)
   - [Using SIMD to calculate euclidean distance](#using-simd-to-calculate-euclidean-distance)
 - [Streaming the dataset](#streaming-the-dataset)
-- [Benchmarking](#benchmarking)
 
 ## Plotted graphs
 
@@ -32,8 +30,6 @@ The blue points are the top 3 results from trying to `greedy_search(1000.0,1000.
 <img src="static/graph-1.png" alt="First Pass, α=1" width="50%">
 
 <img src="static/graph-2.png" alt="Second Pass, α=2" width="50%">
-
-## Hardware
 
 ## Improving indexing performance with SIMD
 
@@ -93,11 +89,3 @@ While trying to use the load and index `dbpedia-entities-openai-1M` the dataset 
 To mitigate this, instead of loading in the full dataset, the vectors are loaded from each file lazily via an `Iterator`.
 
 - Noted that this interferes with indexing latency
-
-## Benchmarking
-
-| Storage    | greedy_search() | index() |
-|------------|-----------------|---------|
-| In-mem     |                 |         |
-| Naive disk |                 |         |
-| io_uring   |                 |         |

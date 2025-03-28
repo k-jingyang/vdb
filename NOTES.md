@@ -8,7 +8,7 @@
 
 ## TODO
 
-- Implement search?
+- Implement search
 - qdrant benchmarking
 - Implement delete based on Fresh-DiskANN
 - Try out io_uring experiments?
