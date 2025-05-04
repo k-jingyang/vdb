@@ -147,7 +147,7 @@ impl Graph {
                 if !visited.contains(&node.1) {
                     to_visit.push(Reverse(*node));
                 }
-            })
+            });
         }
 
         let k_closests: Vec<u32> = closest_l
@@ -309,5 +309,5 @@ pub struct Node {
 
 fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
     let l2sq_dist = f32::l2sq(a, b);
-    return l2sq_dist.unwrap() as i64;
+    return l2sq_dist.unwrap().mul_add(1000000.0, 0.0) as i64;
 }

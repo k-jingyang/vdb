@@ -18,7 +18,7 @@ pub(crate) fn read_query_vector() -> Result<Vec<f32>> {
 
     for line in reader.lines() {
         let line = line?;
-        floats.push(line.parse::<f32>().unwrap());
+        floats.push(line.trim().parse::<f32>().unwrap());
     }
 
     Ok(floats)
@@ -43,7 +43,6 @@ pub(crate) fn read_dataset(
                 break;
             }
             paths.push(path.to_str().unwrap().to_string());
-            println!("{:?}", paths);
         }
     }
 

@@ -10,42 +10,31 @@ mod cli;
 mod data;
 
 const MAX_NEIGHBOUR_COUNT: u8 = 5;
+const DBPEDIA_DIMENSIONS: usize = 1536;
 
-// 38461 vectors of 1536 dimensions
-// in-mem indexing: 842.50ms
-// disk indexing: 13.25s
-// fresh-disk graph::index took 2.11s
-//
-// 1,000,000 vectors of dimension: 1536
-// In-mem graph::new took 5.854s
-// In-mem graph::index took 46.901s
-//
-// Disk graph::new took 194.129s
-// Disk graph::index took 1635.210s
-//
-// fresh-disk graph::new took 85.325s 158.42s, 111.485s
-// fresh-disk graph::index took 498.031s
-//
-// fresh-disk graph::new took 56.838s
-// fresh-disk graph::index took 163.65
 fn main() {
     let args = Args::parse();
-    let test_query_vec: [f32; 1536] = data::read_query_vector()
-        .expect("Failed to read query vector")
-        .as_slice()
-        .try_into()
-        .expect("Failed to convert slice to array");
+
     match args.dataset {
         Dataset::Dbpedia => {
-            let graph = index_dbpedia(args.storage_type);
-            let res = query_dbpedia_index(&graph, &test_query_vec, 5);
-            println!("{:?}", res);
+            let graph = index_dbpedia(args.storage_type, 1);
+
+            let test_query_vec: [f32; DBPEDIA_DIMENSIONS] = data::read_query_vector()
+                .expect("Failed to read query vector")
+                .as_slice()
+                .try_into()
+                .expect("Failed to convert slice to array");
+
+            let similar_docs = query_dbpedia_index(&graph, &test_query_vec, 5);
+            for doc in similar_docs {
+                println!("{}\n", doc);
+            }
         }
         Dataset::Debug => {
             debug(
                 2000,
                 std::ops::Range {
-                    start: 2000.0,
+                    start: 0.0,
                     end: 2000.0,
                 },
                 args.storage_type,
@@ -58,17 +47,21 @@ fn main() {
     }
 }
 
-fn index_dbpedia(index_storage_type: Storage) -> vdb::Graph {
-    let res = data::read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1);
-    // TODO: hardcode dimensions for now
-    let storage = new_index_storage(index_storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
+/// index_dbpedia indexes the dbpedia dataset using index_storage_type. The number of files to read from the dataset can be specified with dataset_files. -1 to load all files (note that this will incur a huge indexing time)
+fn index_dbpedia(index_storage_type: Storage, dataset_files: i64) -> vdb::Graph {
+    let res = data::read_dataset("dataset/dbpedia-entities-openai-1M/data/", dataset_files);
+    let storage = new_index_storage(
+        index_storage_type,
+        DBPEDIA_DIMENSIONS as u16,
+        MAX_NEIGHBOUR_COUNT,
+    );
     let start = std::time::Instant::now();
     let mut graph = vdb::graph::Graph::new(
         res,
-        2,
+        5,
         MAX_NEIGHBOUR_COUNT,
         storage,
-        Box::new(InMemStorage::default()),
+        Box::new(InMemStorage::default()), // TODO: Can provide other implementations
     )
     .unwrap();
     println!(
@@ -78,6 +71,7 @@ fn index_dbpedia(index_storage_type: Storage) -> vdb::Graph {
     );
 
     let start = std::time::Instant::now();
+    graph.index(1.0).unwrap();
     graph.index(1.2).unwrap();
     println!(
         "{:?} graph::index took {:?}",

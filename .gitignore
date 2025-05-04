@@ -1,4 +1,4 @@
 /target
 /*.png
-dataset/*
+dataset/dbpedia*
 *.index

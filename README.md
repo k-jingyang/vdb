@@ -3,8 +3,6 @@
 
 Toy implementation of [Vamana (DiskANN) paper](https://proceedings.neurips.cc/paper/2019/file/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Paper.pdf) in Rust.
 
-Disclaimer: Since this is only a toy implementation, only the vectors are stored, and not pre-embedded text.
-
 ## Table of contents
 
 - [vdb](#vdb)
@@ -15,7 +13,9 @@ Disclaimer: Since this is only a toy implementation, only the vectors are stored
   - [Using SIMD to calculate euclidean distance](#using-simd-to-calculate-euclidean-distance)
 - [FreshDisk](#freshdisk)
 - [Streaming the dataset](#streaming-the-dataset)
-- [Limitations](#limitations)
+- [Benchmarks](#benchmarks)
+- [Storing and querying data \[TBC after bugfix\]](#storing-and-querying-data-tbc-after-bugfix)
+- [Limitations (i.e. improvements that can be made)](#limitations-ie-improvements-that-can-be-made)
 
 ## Plotted graphs
 
@@ -76,7 +76,7 @@ fn euclidean_distance(a: &[f32], b: &[f32]) -> i64 {
 }
 ```
 
-The full in-mem indexing's latency now takes around `40s~47s`, about a 5x improvement. From the updated flamegraph, we can also see that `euclidean_distance` is no longer hogging the CPU time.
+The full in-mem indexing's latency now takes around `40s~51s`, about a 5x improvement. From the updated flamegraph, we can also see that `euclidean_distance` is no longer hogging the CPU time.
 
 - Reading the dataset became the dominating factor
 
@@ -96,7 +96,42 @@ To mitigate this, instead of loading in the full dataset, the vectors are loaded
 
 - Noted that this interferes with indexing latency
 
-## Limitations
+## Benchmarks
+
+Using the 1,000,000 vectors of 1536 dimension from the dbpedia dataset, I compared the following storage implementation.
+
+- [In-mem](src/storage/inmem.rs) where all indexes and operations are in-mem
+- [Naive disk](src/storage/disk.rs) where all indexes and operations are on disk
+- [Fresh-Disk](src/storage/fresh_disk.rs) where indexes and operations are in a mix of in-mem and on-disk
+  - The numbers reflects the hybrid approach
+
+| Storage type | Indexing time |
+|--------------|---------------|
+| In-mem       | 51s           |
+| Naive disk   | 1829s         |
+| Fresh-Disk   | 219s          |
+
+## Storing and querying data [TBC after bugfix]
+
+Initially, the toy implementation only stored vectors and no the text data. I decided to add it in for a more practical showcase. Data is all stored in-memory.
+
+Because the embeddings are via OpenAI's paid `text-embedding-ada-002` and to keep it simple, I will query the index with a known vector from the dataset.
+
+The query vector is loaded from [dataset/query.txt](dataset/query.txt). Using the query vector of `<dbpedia:An_American_in_Paris>`, we query the index with `k=5` (5 most similar). We see that we are able to retrieve the correct match in the 3rd hit.
+
+```
+Animalia is an illustrated children's book by Graeme Base. It was originally published in 1986, followed by a tenth anniversary edition in 1996, and a 25th anniversary edition in 2012. Over three million copies have been sold.   A special numbered and signed anniversary edition was also published in 1996, with an embossed gold jacket.
+
+The Academy Awards are the oldest awards ceremony for achievements in motion pictures. The Academy Award for Best Production Design recognizes achievement in art direction on a film. The category's original name was Best Art Direction, but was changed to its current name in 2012 for the 85th Academy Awards.  This change resulted from the Art Director's branch of the Academy being renamed the Designer's branch.
+
+**An American in Paris is a jazz-influenced symphonic poem by the American composer George Gershwin, written in 1928. Inspired by the time Gershwin had spent in Paris, it evokes the sights and energy of the French capital in the 1920s and is one of his best-known compositions.Gershwin composed An American in Paris on commission from the conductor Walter Damrosch. He scored the piece for the standard instruments of the symphony orchestra plus celesta, saxophones, and automobile horns.**
+
+Baron Peter Pavlovich Shafirov (Russian: Пётр Павлович Шафиров) (1670—1739), Russian statesman, one of the ablest coadjutors of Peter the Great.
+
+The term warhead refers to the explosive and/or toxic material that is delivered by a missile, rocket, or torpedo.
+```
+
+## Limitations (i.e. improvements that can be made)
 
 As this is a toy project to learn more about Rust and db development, there are several limitations
 
