@@ -3,20 +3,18 @@
 use chrono::Local;
 use clap::Parser;
 use cli::{Args, Dataset, Storage};
-use polars::{export::num::ToPrimitive, prelude::*};
 use std::fs;
-use vdb::{prelude::Result, storage, vector::generate_random_vectors, Node};
+use vdb::{storage, vector::generate_random_vectors, InMemStorage, Node};
+
 mod cli;
+mod data;
 
 const MAX_NEIGHBOUR_COUNT: u8 = 5;
 
 // 38461 vectors of 1536 dimensions
 // in-mem indexing: 842.50ms
 // disk indexing: 13.25s
-// fresh-disk graph::index took 2.11s (before io_uring optimisation)
-//
-// syscalls count for fresh-disk (before io_uring optimisation)
-// - 480680
+// fresh-disk graph::index took 2.11s
 //
 // 1,000,000 vectors of dimension: 1536
 // In-mem graph::new took 5.854s
@@ -32,9 +30,13 @@ const MAX_NEIGHBOUR_COUNT: u8 = 5;
 // fresh-disk graph::index took 163.65
 fn main() {
     let args = Args::parse();
-
+    let test_query_vec: [f32; 1536] = data::read_query_vector();
     match args.dataset {
-        Dataset::Dbpedia => run_dataset_test(args.storage_type),
+        Dataset::Dbpedia => {
+            let graph = index_dbpedia(args.storage_type);
+            let res = query_dbpedia_index(&graph, &test_query_vec, 5);
+            println!("{:?}", res);
+        }
         Dataset::Debug => {
             debug(
                 2000,
@@ -52,53 +54,45 @@ fn main() {
     }
 }
 
-fn run_dataset_test(storage_type: Storage) {
-    let res = read_dataset("dataset/dbpedia-entities-openai-1M/data/", -1);
+fn index_dbpedia(index_storage_type: Storage) -> vdb::Graph {
+    let res = data::read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1);
     // TODO: hardcode dimensions for now
-    let storage = new_storage(storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
+    let storage = new_storage(index_storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
     let start = std::time::Instant::now();
-    let mut graph = vdb::graph::Graph::new(res, 2, MAX_NEIGHBOUR_COUNT, storage).unwrap();
-    println!("{:?} graph::new took {:?}", storage_type, start.elapsed());
+    let mut graph = vdb::graph::Graph::new(
+        res,
+        2,
+        MAX_NEIGHBOUR_COUNT,
+        storage,
+        Box::new(InMemStorage::default()),
+    )
+    .unwrap();
+    println!(
+        "{:?} graph::new took {:?}",
+        index_storage_type,
+        start.elapsed()
+    );
 
     let start = std::time::Instant::now();
     graph.index(1.2).unwrap();
-    println!("{:?} graph::index took {:?}", storage_type, start.elapsed());
+    println!(
+        "{:?} graph::index took {:?}",
+        index_storage_type,
+        start.elapsed()
+    );
+    graph
 }
 
-fn read_datafile(file: &str) -> Vec<Vec<f32>> {
-    let args = ScanArgsParquet::default();
-    let df = LazyFrame::scan_parquet(file, args)
-        .unwrap()
-        .collect()
-        .unwrap();
-    let vector_column = df.column("openai").unwrap().list().unwrap();
-    fn parse_vector(arr: Option<Series>) -> Vec<f32> {
-        let series = arr.ok_or("series not found").unwrap();
-        let arr_value = series.f64().unwrap();
-        let single_vector: Vec<f32> = arr_value.into_iter().filter_map(|x| x?.to_f32()).collect();
-        single_vector
-    }
-    let vecs = vector_column.into_iter().map(parse_vector);
-    vecs.collect()
-}
-
-fn read_dataset(dataset_path: &str, ingest_files: i64) -> impl Iterator<Item = Vec<Vec<f32>>> {
-    let mut paths = Vec::new();
-    for entry in std::fs::read_dir(dataset_path).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_file() && path.extension().unwrap() == "parquet" {
-            if ingest_files >= 0 && paths.len() == ingest_files as usize {
-                break;
-            }
-            paths.push(path.to_str().unwrap().to_string());
+fn query_dbpedia_index(graph: &vdb::Graph, query: &[f32], k: usize) -> Vec<String> {
+    let closest_k_nodes = graph.greedy_search_random_start(query, k, 10);
+    let mut result = Vec::with_capacity(closest_k_nodes.0.len());
+    for node_index in closest_k_nodes.0 {
+        let data = graph.data_store.get_data(node_index);
+        if let Some(content) = data {
+            result.push(content);
         }
     }
-
-    let vec_iter = paths
-        .into_iter()
-        .map(|path: String| -> _ { read_datafile(&path) });
-    vec_iter
+    result
 }
 
 fn debug(
@@ -109,26 +103,28 @@ fn debug(
     let test_vectors = generate_random_vectors(seed_dataset_size, &vector_value_range, 2);
     let storage = new_storage(
         storage_type,
-        test_vectors[0].len() as u16,
+        test_vectors[0].0.len() as u16,
         MAX_NEIGHBOUR_COUNT,
     );
+
     let mut graph = vdb::graph::Graph::new(
         vec![test_vectors].into_iter(),
         2,
         MAX_NEIGHBOUR_COUNT,
         storage,
+        Box::new(InMemStorage::default()),
     )
     .unwrap();
     let mut plotter = vdb::plotter::Plotter::new(vector_value_range.clone());
 
     // plot initial
-    let nodes = graph.storage.get_all_nodes().unwrap();
+    let nodes = graph.index_store.get_all_nodes().unwrap();
     plotter.set_connected_nodes(&nodes);
 
     let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
-        .filter_map(|&id| graph.storage.get_node(id).ok())
+        .filter_map(|&id| graph.index_store.get_node(id).ok())
         .collect();
     plotter.set_isolated_nodes(&closest_nodes);
 
@@ -143,10 +139,10 @@ fn debug(
     let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
-        .filter_map(|&id| graph.storage.get_node(id).ok())
+        .filter_map(|&id| graph.index_store.get_node(id).ok())
         .collect();
     plotter.set_isolated_nodes(&closest_nodes);
-    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
+    plotter.set_connected_nodes(&graph.index_store.get_all_nodes().unwrap());
     plotter
         .plot(&format!("{}/graph-1.png", path), "first pass, α=1")
         .unwrap();
@@ -156,17 +152,19 @@ fn debug(
     let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
-        .filter_map(|&id| graph.storage.get_node(id).ok())
+        .filter_map(|&id| graph.index_store.get_node(id).ok())
         .collect();
     plotter.set_isolated_nodes(&closest_nodes);
-    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
+    plotter.set_connected_nodes(&graph.index_store.get_all_nodes().unwrap());
     plotter
         .plot(&format!("{}/graph-2.png", path), "second pass, α=1.2")
         .unwrap();
 
     // insert new node
-    let inserted_node = graph.insert(vec![1000.0, 1000.0], 1, 1.2, 10).unwrap();
-    plotter.set_connected_nodes(&graph.storage.get_all_nodes().unwrap());
+    let inserted_node = graph
+        .insert(vec![1000.0, 1000.0], "".to_string(), 1, 1.2, 10)
+        .unwrap();
+    plotter.set_connected_nodes(&graph.index_store.get_all_nodes().unwrap());
     plotter.set_isolated_nodes(&vec![inserted_node]);
     plotter
         .plot(&format!("{}/graph-3.png", path), "inserted")
@@ -179,7 +177,7 @@ fn new_storage(
     max_neighbour_count: u8,
 ) -> Box<dyn storage::GraphStorage> {
     match storage_type {
-        Storage::InMem => Box::new(storage::InMemStorage::new()),
+        Storage::InMem => Box::new(storage::InMemStorage::default()),
         Storage::PureDisk => Box::new(
             storage::NaiveDisk::new(dimensions, max_neighbour_count, "disk.index", "disk.free")
                 .unwrap(),

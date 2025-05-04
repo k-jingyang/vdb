@@ -6,4 +6,4 @@ mod storage;
 pub use disk::NaiveDisk;
 pub use fresh_disk::FreshDisk;
 pub use inmem::InMemStorage;
-pub use storage::GraphStorage;
+pub use storage::{DataStore, GraphStorage};

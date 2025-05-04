@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use vdb::graph;
+use vdb::{graph, InMemStorage};
 
 fn bench_index(c: &mut Criterion) {
     const SIZE: usize = 100;
@@ -13,7 +13,7 @@ fn bench_index(c: &mut Criterion) {
         b.iter(|| {
             create_and_index_graph(
                 black_box(&test_vectors),
-                || Box::new(vdb::storage::InMemStorage::new()),
+                || Box::new(vdb::storage::InMemStorage::default()),
                 MAX_NEIGHBOUR_COUNT,
             )
         })
@@ -51,7 +51,8 @@ fn bench_query(c: &mut Criterion) {
         vec![test_vectors.clone()].into_iter(),
         2,
         MAX_NEIGHBOUR_COUNT,
-        Box::new(vdb::storage::InMemStorage::new()),
+        Box::new(vdb::storage::InMemStorage::default()),
+        Box::new(vdb::storage::InMemStorage::default()),
     )
     .unwrap();
     in_mem_graph.index(1.2).unwrap();
@@ -68,6 +69,7 @@ fn bench_query(c: &mut Criterion) {
             vdb::storage::NaiveDisk::new(DIMENSION, MAX_NEIGHBOUR_COUNT, "disk.index", "disk.free")
                 .unwrap(),
         ),
+        Box::new(vdb::storage::InMemStorage::default()),
     )
     .unwrap();
 
@@ -79,7 +81,7 @@ fn bench_query(c: &mut Criterion) {
 }
 
 fn create_and_index_graph(
-    test_vectors: &Vec<Vec<f32>>,
+    test_vectors: &Vec<(Vec<f32>, String)>,
     storage_factory: fn() -> Box<dyn vdb::storage::GraphStorage>,
     max_neighbour_count: u8,
 ) {
@@ -90,6 +92,7 @@ fn create_and_index_graph(
         R,
         max_neighbour_count,
         storage_factory(),
+        Box::new(InMemStorage::default()),
     )
     .unwrap();
 

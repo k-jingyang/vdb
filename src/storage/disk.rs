@@ -32,9 +32,8 @@ use super::storage::GraphStorage;
 // [ u32   ][ f32 * dim  ][  u32 * max_neighbor_count (padded)   ]
 //
 // TODO:
-// 1. Figure out how to do metadata storage?
-// 2. log based input instead
-// 3. decouple node_id from node index
+// 1. log based input instead
+// 2. decouple node_id from node index
 pub struct NaiveDisk {
     dimensions: u16,
     max_neighbour_count: u8,

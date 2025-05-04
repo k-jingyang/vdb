@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    io,
+    default, io,
 };
 
 use rand::Rng;
@@ -8,16 +8,12 @@ use rand::Rng;
 use crate::graph::Node;
 use crate::{prelude::*, Error};
 
-use super::GraphStorage;
+use super::{storage::DataStore, GraphStorage};
 
+#[derive(Default)]
 pub struct InMemStorage {
     nodes: Vec<Node>,
-}
-
-impl InMemStorage {
-    pub fn new() -> Self {
-        InMemStorage { nodes: Vec::new() }
-    }
+    data: HashMap<u32, String>,
 }
 
 impl GraphStorage for InMemStorage {
@@ -65,5 +61,16 @@ impl GraphStorage for InMemStorage {
             .iter()
             .map(|node| (node.id, node.clone()))
             .collect())
+    }
+}
+
+impl DataStore for InMemStorage {
+    fn add_data(&mut self, node_id: u32, data: String) -> Result<()> {
+        self.data.insert(node_id, data);
+        Ok(())
+    }
+
+    fn get_data(&self, node_id: u32) -> Option<String> {
+        self.data.get(&node_id).cloned()
     }
 }

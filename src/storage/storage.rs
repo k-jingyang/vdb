@@ -12,3 +12,8 @@ pub trait GraphStorage {
     fn get_all_node_indexes(&self) -> Result<Vec<u32>>;
     fn get_all_nodes(&self) -> Result<HashMap<u32, Node>>;
 }
+
+pub trait DataStore {
+    fn add_data(&mut self, node_id: u32, data: String) -> Result<()>;
+    fn get_data(&self, node_id: u32) -> Option<String>;
+}
