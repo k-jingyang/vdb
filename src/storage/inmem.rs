@@ -8,7 +8,7 @@ use rand::Rng;
 use crate::graph::Node;
 use crate::{prelude::*, Error};
 
-use super::{storage::DataStore, GraphStorage};
+use super::{storage::DataStore, IndexStore};
 
 #[derive(Default)]
 pub struct InMemStorage {
@@ -16,7 +16,7 @@ pub struct InMemStorage {
     data: HashMap<u32, String>,
 }
 
-impl GraphStorage for InMemStorage {
+impl IndexStore for InMemStorage {
     fn add_nodes(&mut self, data: &[Vec<f32>]) -> Result<Vec<u32>> {
         let mut node_ids = Vec::new();
         for vector in data {

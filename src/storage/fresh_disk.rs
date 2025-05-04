@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use super::GraphStorage;
+use super::IndexStore;
 
 // FreshDisk is the storage implementation of the system described in the FreshDiskANN paper
 pub struct FreshDisk {
@@ -115,7 +115,7 @@ impl FreshDisk {
     }
 }
 
-impl GraphStorage for FreshDisk {
+impl IndexStore for FreshDisk {
     fn add_nodes(&mut self, data: &[Vec<f32>]) -> Result<Vec<u32>> {
         let mut created_node_indices = Vec::new();
 

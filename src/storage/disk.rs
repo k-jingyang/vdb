@@ -12,7 +12,7 @@ use std::{
     io::{BufWriter, Read, Seek, SeekFrom, Write},
 };
 
-use super::storage::GraphStorage;
+use super::storage::IndexStore;
 // disk layout
 // key principle: lookup for each node index must be O(1)
 //
@@ -129,7 +129,7 @@ impl NaiveDisk {
     }
 }
 
-impl GraphStorage for NaiveDisk {
+impl IndexStore for NaiveDisk {
     fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> Result<()> {
         if connections.len() > self.max_neighbour_count as usize {
             return Err(error::Error::InvalidInput(

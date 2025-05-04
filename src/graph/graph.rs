@@ -1,4 +1,4 @@
-use crate::storage::GraphStorage;
+use crate::storage::IndexStore;
 use crate::{prelude::*, DataStore};
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use simsimd::SpatialSimilarity;
@@ -8,7 +8,7 @@ use std::{
 };
 
 pub struct Graph {
-    pub index_store: Box<dyn GraphStorage>,
+    pub index_store: Box<dyn IndexStore>,
     pub data_store: Box<dyn DataStore>,
     pub(crate) max_neighbour_count: usize,
 }
@@ -18,7 +18,7 @@ impl Graph {
         input: I,
         r: usize,
         max_neighbour_count: u8,
-        mut index_store: Box<dyn GraphStorage>,
+        mut index_store: Box<dyn IndexStore>,
         mut data_store: Box<dyn DataStore>,
     ) -> Result<Self>
     where

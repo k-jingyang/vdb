@@ -30,7 +30,11 @@ const MAX_NEIGHBOUR_COUNT: u8 = 5;
 // fresh-disk graph::index took 163.65
 fn main() {
     let args = Args::parse();
-    let test_query_vec: [f32; 1536] = data::read_query_vector();
+    let test_query_vec: [f32; 1536] = data::read_query_vector()
+        .expect("Failed to read query vector")
+        .as_slice()
+        .try_into()
+        .expect("Failed to convert slice to array");
     match args.dataset {
         Dataset::Dbpedia => {
             let graph = index_dbpedia(args.storage_type);
@@ -57,7 +61,7 @@ fn main() {
 fn index_dbpedia(index_storage_type: Storage) -> vdb::Graph {
     let res = data::read_dataset("dataset/dbpedia-entities-openai-1M/data/", 1);
     // TODO: hardcode dimensions for now
-    let storage = new_storage(index_storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
+    let storage = new_index_storage(index_storage_type, 1536 as u16, MAX_NEIGHBOUR_COUNT);
     let start = std::time::Instant::now();
     let mut graph = vdb::graph::Graph::new(
         res,
@@ -101,7 +105,7 @@ fn debug(
     storage_type: Storage,
 ) {
     let test_vectors = generate_random_vectors(seed_dataset_size, &vector_value_range, 2);
-    let storage = new_storage(
+    let storage = new_index_storage(
         storage_type,
         test_vectors[0].0.len() as u16,
         MAX_NEIGHBOUR_COUNT,
@@ -171,11 +175,11 @@ fn debug(
         .unwrap();
 }
 
-fn new_storage(
+fn new_index_storage(
     storage_type: Storage,
     dimensions: u16,
     max_neighbour_count: u8,
-) -> Box<dyn storage::GraphStorage> {
+) -> Box<dyn storage::IndexStore> {
     match storage_type {
         Storage::InMem => Box::new(storage::InMemStorage::default()),
         Storage::PureDisk => Box::new(

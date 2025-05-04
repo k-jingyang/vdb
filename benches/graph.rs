@@ -82,7 +82,7 @@ fn bench_query(c: &mut Criterion) {
 
 fn create_and_index_graph(
     test_vectors: &Vec<(Vec<f32>, String)>,
-    storage_factory: fn() -> Box<dyn vdb::storage::GraphStorage>,
+    storage_factory: fn() -> Box<dyn vdb::storage::IndexStore>,
     max_neighbour_count: u8,
 ) {
     const R: usize = 2;

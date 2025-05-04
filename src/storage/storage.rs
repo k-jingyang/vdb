@@ -4,7 +4,7 @@ use crate::prelude::*;
 
 use crate::graph::Node;
 
-pub trait GraphStorage {
+pub trait IndexStore {
     fn add_nodes(&mut self, data: &[Vec<f32>]) -> Result<Vec<u32>>;
     fn get_node(&self, node_id: u32) -> Result<Node>;
     fn set_connections(&mut self, node_index: u32, connections: &HashSet<u32>) -> Result<()>;

@@ -1,13 +1,27 @@
-use std::{fs, io};
+use std::{
+    fs::{self, File},
+    io::{self, BufRead},
+};
 
 use polars::{
     export::num::ToPrimitive,
     prelude::{LazyFrame, ScanArgsParquet},
     series::Series,
 };
+use vdb::prelude::Result;
 
-pub(crate) fn read_query_vector() -> [f32; 1536] {
-    [0.0; 1536]
+pub(crate) fn read_query_vector() -> Result<Vec<f32>> {
+    let file = File::open("dataset/query.txt")?;
+    let reader = io::BufReader::new(file);
+
+    let mut floats = Vec::with_capacity(1536);
+
+    for line in reader.lines() {
+        let line = line?;
+        floats.push(line.parse::<f32>().unwrap());
+    }
+
+    Ok(floats)
 }
 
 pub(crate) fn read_dataset(
@@ -18,7 +32,7 @@ pub(crate) fn read_dataset(
     let mut entries = fs::read_dir(dataset_path)
         .unwrap()
         .map(|res| res.map(|e| e.path()))
-        .collect::<Result<Vec<_>, io::Error>>()
+        .collect::<std::result::Result<Vec<_>, io::Error>>()
         .unwrap();
 
     entries.sort();
