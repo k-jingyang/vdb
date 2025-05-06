@@ -112,6 +112,8 @@ impl Graph {
         search_list_size: usize,
     ) -> (Vec<u32>, HashSet<u32>) {
         let mut closest_l: BinaryHeap<(i64, u32)> = BinaryHeap::new();
+        let mut closest_l_set: HashSet<u32> = HashSet::new();
+
         let mut visited: HashSet<u32> = HashSet::new();
         // .0 is the distance from query_node_index, .1 is the index of the node
         let mut to_visit: BinaryHeap<Reverse<(i64, u32)>> = BinaryHeap::new();
@@ -121,6 +123,7 @@ impl Graph {
         let start_node_distance = euclidean_distance(query_node, &start_node.vector);
         to_visit.push(Reverse((start_node_distance, start_node_index)));
         closest_l.push((start_node_distance, start_node_index));
+        closest_l_set.insert(start_node_index);
 
         while let Some(Reverse((_, visiting))) = to_visit.pop() {
             visited.insert(visiting);
@@ -134,7 +137,10 @@ impl Graph {
                 let visiting_node_neighbor = self.index_store.get_node(*neighbor).unwrap();
                 let distance_to_q = euclidean_distance(&visiting_node_neighbor.vector, query_node);
 
-                closest_l.push((distance_to_q, *neighbor));
+                if closest_l_set.contains(neighbor) {
+                    closest_l.push((distance_to_q, *neighbor));
+                    closest_l_set.insert(*neighbor);
+                }
             }
 
             // since closest_k is a max heap, we will keep the k closest after popping

@@ -32,7 +32,7 @@ fn main() {
         }
         Dataset::Debug => {
             debug(
-                2000,
+                200,
                 std::ops::Range {
                     start: 0.0,
                     end: 2000.0,
@@ -107,7 +107,7 @@ fn debug(
 
     let mut graph = vdb::graph::Graph::new(
         vec![test_vectors].into_iter(),
-        2,
+        3,
         MAX_NEIGHBOUR_COUNT,
         storage,
         Box::new(InMemStorage::default()),
@@ -119,7 +119,7 @@ fn debug(
     let nodes = graph.index_store.get_all_nodes().unwrap();
     plotter.set_connected_nodes(&nodes);
 
-    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 5, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
         .filter_map(|&id| graph.index_store.get_node(id).ok())
