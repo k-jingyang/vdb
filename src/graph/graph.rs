@@ -24,7 +24,7 @@ impl Graph {
     where
         I: Iterator<Item = Vec<(Vec<f32>, String)>>,
     {
-        let mut batch_input: (Vec<(Vec<f32>)>, Vec<String>) = (vec![], vec![]);
+        let mut batch_input: (Vec<Vec<f32>>, Vec<String>) = (vec![], vec![]);
         let mut new_nodes: Vec<Node> = Vec::new();
         let batch_size = 1000;
 
@@ -137,6 +137,7 @@ impl Graph {
                 let visiting_node_neighbor = self.index_store.get_node(*neighbor).unwrap();
                 let distance_to_q = euclidean_distance(&visiting_node_neighbor.vector, query_node);
 
+                // TODO: Maybe should update neighbour instead of excluding?
                 if closest_l_set.contains(neighbor) {
                     closest_l.push((distance_to_q, *neighbor));
                     closest_l_set.insert(*neighbor);
