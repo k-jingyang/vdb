@@ -142,11 +142,11 @@ fn debug(
     plotter.set_isolated_nodes(&closest_nodes);
     plotter.set_connected_nodes(&graph.index_store.get_all_nodes().unwrap());
     plotter
-        .plot(&format!("{}/graph-1.png", path), "first pass, α=1")
+        .plot(&format!("{}/graph-1.png", path), "first pass, α=1.0")
         .unwrap();
 
-    // alpha=1.2
-    graph.index(1.2).unwrap();
+    // alpha=1.0
+    graph.index(1.0).unwrap();
     let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
@@ -155,12 +155,12 @@ fn debug(
     plotter.set_isolated_nodes(&closest_nodes);
     plotter.set_connected_nodes(&graph.index_store.get_all_nodes().unwrap());
     plotter
-        .plot(&format!("{}/graph-2.png", path), "second pass, α=1.2")
+        .plot(&format!("{}/graph-2.png", path), "second pass, α=1.0")
         .unwrap();
 
     // insert new node
     let inserted_node = graph
-        .insert(vec![1000.0, 1000.0], "".to_string(), 1, 1.2, 10)
+        .insert(vec![1000.0, 1000.0], "".to_string(), 1, 1.0, 10)
         .unwrap();
     plotter.set_connected_nodes(&graph.index_store.get_all_nodes().unwrap());
     plotter.set_isolated_nodes(&vec![inserted_node]);
