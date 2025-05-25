@@ -15,12 +15,12 @@ pub(super) fn index_dbpedia(index_storage: Box<dyn IndexStore>, dataset_files: i
         Box::new(InMemStorage::default()), // TODO: Can provide other implementations
     )
     .unwrap();
-    println!("{:?} graph::new took {:?}", index_name, start.elapsed());
+    println!("{} graph::new took {:?}", index_name, start.elapsed());
 
     let start = std::time::Instant::now();
     graph.index(1.0).unwrap();
     graph.index(1.0).unwrap();
-    println!("{:?} graph::index took {:?}", index_name, start.elapsed());
+    println!("{} graph::index took {:?}", index_name, start.elapsed());
     graph
 }
 
