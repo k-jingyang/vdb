@@ -31,7 +31,7 @@ pub(super) fn debug(
     let nodes = graph.index_store.get_all_nodes().unwrap();
     plotter.set_connected_nodes(&nodes);
 
-    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 5, 10);
+    let (closests, _) = graph.greedy_search(1, &[1000.0f32, 1000.0f32], 3, 10);
     let closest_nodes: Vec<Node> = closests
         .iter()
         .filter_map(|&id| graph.index_store.get_node(id).ok())
