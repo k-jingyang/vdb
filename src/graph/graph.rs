@@ -138,7 +138,7 @@ impl Graph {
                 let distance_to_q = euclidean_distance(&visiting_node_neighbor.vector, query_node);
 
                 // TODO: Maybe should update neighbour instead of excluding?
-                if closest_l_set.contains(neighbor) {
+                if !closest_l_set.contains(neighbor) {
                     closest_l.push((distance_to_q, *neighbor));
                     closest_l_set.insert(*neighbor);
                 }
@@ -146,7 +146,9 @@ impl Graph {
 
             // since closest_k is a max heap, we will keep the k closest after popping
             while closest_l.len() > search_list_size {
-                closest_l.pop();
+                if let Some((_, node)) = closest_l.pop() {
+                    closest_l_set.remove(&node);
+                }
             }
 
             to_visit.clear();
