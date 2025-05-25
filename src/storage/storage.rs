@@ -11,6 +11,7 @@ pub trait IndexStore {
     fn get_random_node(&self) -> Option<Node>;
     fn get_all_node_indexes(&self) -> Result<Vec<u32>>;
     fn get_all_nodes(&self) -> Result<HashMap<u32, Node>>;
+    fn get_name(&self) -> String;
 }
 
 pub trait DataStore {

@@ -14,7 +14,7 @@ Toy implementation of [Vamana (DiskANN) paper](https://proceedings.neurips.cc/pa
 - [FreshDisk](#freshdisk)
 - [Streaming the dataset](#streaming-the-dataset)
 - [Benchmarks](#benchmarks)
-- [Storing and querying data \[TBC after bugfix\]](#storing-and-querying-data-tbc-after-bugfix)
+- [Storing and querying data](#storing-and-querying-data)
 - [Limitations (i.e. improvements that can be made)](#limitations-ie-improvements-that-can-be-made)
 
 ## Plotted graphs
@@ -111,24 +111,26 @@ Using the 1,000,000 vectors of 1536 dimension from the dbpedia dataset, I compar
 | Naive disk   | 1829s         |
 | Fresh-Disk   | 219s          |
 
-## Storing and querying data [TBC after bugfix]
+## Storing and querying data
 
-Initially, the toy implementation only stored vectors and no the text data. I decided to add it in for a more practical showcase. Data is all stored in-memory.
+Initially, the toy implementation only stored vectors and not the text data. I decided to add it in for a more practical showcase. Data is all stored in-memory.
 
 Because the embeddings are via OpenAI's paid `text-embedding-ada-002` and to keep it simple, I will query the index with a known vector from the dataset.
 
-The query vector is loaded from [dataset/query.txt](dataset/query.txt). Using the query vector of `<dbpedia:An_American_in_Paris>`, we query the index with `k=5` (5 most similar). We see that we are able to retrieve the correct match in the 3rd hit.
+The query vector is loaded from [dataset/query.txt](dataset/query.txt). Using the query vector of `<dbpedia:ASCII>`, we query the index with `k=5` (5 most similar). We see that we are able to retrieve the correct match (1st) and other relevant matches.
 
-```
-Animalia is an illustrated children's book by Graeme Base. It was originally published in 1986, followed by a tenth anniversary edition in 1996, and a 25th anniversary edition in 2012. Over three million copies have been sold.   A special numbered and signed anniversary edition was also published in 1996, with an embossed gold jacket.
+> Due to the nature of approximation and randomization, we don't always get the correct match across multiple queries
 
-The Academy Awards are the oldest awards ceremony for achievements in motion pictures. The Academy Award for Best Production Design recognizes achievement in art direction on a film. The category's original name was Best Art Direction, but was changed to its current name in 2012 for the 85th Academy Awards.  This change resulted from the Art Director's branch of the Academy being renamed the Designer's branch.
+```text
+ASCII (/ˈæski/ ASS-kee), abbreviated from American Standard Code for Information Interchange, is a character-encoding scheme (the IANA prefers the name US-ASCII).  ASCII codes represent text in computers, communications equipment, and other devices that use text. Most modern character-encoding schemes are based on ASCII, though they support many additional characters.
 
-**An American in Paris is a jazz-influenced symphonic poem by the American composer George Gershwin, written in 1928. Inspired by the time Gershwin had spent in Paris, it evokes the sights and energy of the French capital in the 1920s and is one of his best-known compositions.Gershwin composed An American in Paris on commission from the conductor Walter Damrosch. He scored the piece for the standard instruments of the symphony orchestra plus celesta, saxophones, and automobile horns.**
+ASCII art is a graphic design technique that uses computers for presentation and consists of pictures pieced together from the 95 printable (from a total of 128) characters defined by the ASCII Standard from 1963 and ASCII compliant character sets with proprietary extended characters (beyond the 128 characters of standard 7-bit ASCII). The term is also loosely used to refer to text based visual art in general.
 
-Baron Peter Pavlovich Shafirov (Russian: Пётр Павлович Шафиров) (1670—1739), Russian statesman, one of the ablest coadjutors of Peter the Great.
+ISO/IEC 8859-1:1998, Information technology — 8-bit single-byte coded graphic character sets — Part 1: Latin alphabet No. 1, is part of the ISO/IEC 8859 series of ASCII-based standard character encodings, first edition published in 1987. It is generally intended for Western European languages (see below for a list).
 
-The term warhead refers to the explosive and/or toxic material that is delivered by a missile, rocket, or torpedo.
+ISO/IEC 8859-15:1999, Information technology — 8-bit single-byte coded graphic character sets — Part 15: Latin alphabet No. 9, is part of the ISO/IEC 8859 series of ASCII-based standard character encodings, first edition published in 1999. It is informally referred to as Latin-9 (and was for a while called Latin-0).
+
+ISO/IEC 8859 is a joint ISO and IEC series of standards for 8-bit character encodings. The series of standards consists of numbered parts, such as ISO/IEC 8859-1, ISO/IEC 8859-2, etc. There are 15 parts, excluding the abandoned ISO/IEC 8859-12. The ISO working group maintaining this series of standards has been disbanded.ISO/IEC 8859 parts 1, 2, 3, and 4 were originally Ecma International standard ECMA-94.
 ```
 
 ## Limitations (i.e. improvements that can be made)
@@ -136,5 +138,5 @@ The term warhead refers to the explosive and/or toxic material that is delivered
 As this is a toy project to learn more about Rust and db development, there are several limitations
 
 1. Does not support delete
-2. Indexes are rebuilt everytime
+2. Indexes are rebuilt every time
 3. WAL not supported

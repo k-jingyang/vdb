@@ -62,6 +62,10 @@ impl IndexStore for InMemStorage {
             .map(|node| (node.id, node.clone()))
             .collect())
     }
+
+    fn get_name(&self) -> String {
+        "InMem".into()
+    }
 }
 
 impl DataStore for InMemStorage {

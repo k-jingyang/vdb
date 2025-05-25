@@ -216,6 +216,10 @@ impl IndexStore for FreshDisk {
 
         Ok(all_nodes)
     }
+
+    fn get_name(&self) -> String {
+        "FreshDisk".into()
+    }
 }
 
 #[cfg(test)]

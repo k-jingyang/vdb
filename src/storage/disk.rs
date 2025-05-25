@@ -289,6 +289,10 @@ impl IndexStore for NaiveDisk {
         }
         Ok(all_nodes)
     }
+
+    fn get_name(&self) -> String {
+        "NaiveDisk".into()
+    }
 }
 #[cfg(test)]
 mod tests {
